@@ -2,18 +2,18 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
-# Copy the solution and project files (update the path to match your real structure)
+# Copy the solution and project files
 COPY *.sln ./
-COPY backend/QuickCashJob/QuickCashJobAPI/*.csproj ./QuickCashJobAPI/
+COPY QuickCashJobAPI/*.csproj ./QuickCashJobAPI/
 
 # Restore dependencies
 RUN dotnet restore
 
-# Copy the rest of the code (preserve correct structure)
+# Copy the rest of the code
 COPY . .
 
-# Build and publish the project (also update path)
-RUN dotnet publish backend/QuickCashJob/QuickCashJobAPI/QuickCashJobAPI.csproj -c Release -o out
+# Build and publish the project
+RUN dotnet publish QuickCashJobAPI/QuickCashJobAPI.csproj -c Release -o out
 
 # Final stage: runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
