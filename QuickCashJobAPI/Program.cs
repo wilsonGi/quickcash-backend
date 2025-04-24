@@ -160,68 +160,68 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// This triggers seed on startup
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-    var context = services.GetRequiredService<ApplicationDbContext>();
-    await SeedSuperAdmin(userManager, roleManager, context);
-}
+//// This triggers seed on startup
+//using (var scope = app.Services.CreateScope())
+//{
+//    var services = scope.ServiceProvider;
+//    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+//    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+//    var context = services.GetRequiredService<ApplicationDbContext>();
+//    await SeedSuperAdmin(userManager, roleManager, context);
+//}
 app.Run();
 
-async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext context)
-{
-    if (!userManager.Users.Any()) // Ensure no users exist before creating the first admin
-    {
-        var companyAdminEmail = Environment.GetEnvironmentVariable("COMPANY_ADMIN_EMAIL");
-        var password = Environment.GetEnvironmentVariable("COMPANY_ADMIN_PASSWORD");
+//async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext context)
+//{
+//    if (!userManager.Users.Any()) // Ensure no users exist before creating the first admin
+//    {
+//        var companyAdminEmail = Environment.GetEnvironmentVariable("COMPANY_ADMIN_EMAIL");
+//        var password = Environment.GetEnvironmentVariable("COMPANY_ADMIN_PASSWORD");
 
-        if (string.IsNullOrEmpty(companyAdminEmail) || string.IsNullOrEmpty(password))
-        {
-            Console.WriteLine("Super Admin email or password is missing from environment variables.");
-            return;
-        }
+//        if (string.IsNullOrEmpty(companyAdminEmail) || string.IsNullOrEmpty(password))
+//        {
+//            Console.WriteLine("Super Admin email or password is missing from environment variables.");
+//            return;
+//        }
 
-        // Ensure roles exist
-        if (!await roleManager.RoleExistsAsync(SD.Role_Company))
-            await roleManager.CreateAsync(new IdentityRole(SD.Role_Company));
+//        // Ensure roles exist
+//        if (!await roleManager.RoleExistsAsync(SD.Role_Company))
+//            await roleManager.CreateAsync(new IdentityRole(SD.Role_Company));
 
-        if (!await roleManager.RoleExistsAsync(SD.Role_Admin))
-            await roleManager.CreateAsync(new IdentityRole(SD.Role_Admin));
+//        if (!await roleManager.RoleExistsAsync(SD.Role_Admin))
+//            await roleManager.CreateAsync(new IdentityRole(SD.Role_Admin));
 
 
-        var adminUser = new ApplicationUser
-        {
-            UserName = companyAdminEmail,
-            Email = companyAdminEmail,
-            Name = "Eric Mensah",
-            Location = "Ghana",
-            NumberOfTasksCompleted = 0,
-            NumberOfTasksEmployed = 0,
-            LastTaskDoneDate = DateTime.UtcNow,
-            LastTaskEmployedDate = DateTime.UtcNow,
-            UserRating = 100,
-            DateJoined = DateTime.UtcNow,
-            PhoneNumber = "0555179587",
-            IsAdmin = true, // Set to true for admin users
-            TrialEndDate = DateTime.MaxValue,
-        };
+//        var adminUser = new ApplicationUser
+//        {
+//            UserName = companyAdminEmail,
+//            Email = companyAdminEmail,
+//            Name = "Eric Mensah",
+//            Location = "Ghana",
+//            NumberOfTasksCompleted = 0,
+//            NumberOfTasksEmployed = 0,
+//            LastTaskDoneDate = DateTime.UtcNow,
+//            LastTaskEmployedDate = DateTime.UtcNow,
+//            UserRating = 100,
+//            DateJoined = DateTime.UtcNow,
+//            PhoneNumber = "0555179587",
+//            IsAdmin = true, // Set to true for admin users
+//            TrialEndDate = DateTime.MaxValue,
+//        };
 
-        var result = await userManager.CreateAsync(adminUser, password);
-        if (result.Succeeded)
-        {
-            await userManager.AddToRoleAsync(adminUser, SD.Role_Company);
-            Console.WriteLine("Super Admin created successfully!");
-        }
-        else
-        {
-            Console.WriteLine("Failed to create Super Admin:");
-            foreach (var error in result.Errors)
-            {
-                Console.WriteLine(error.Description);
-            }
-        }
-    }
-}
+//        var result = await userManager.CreateAsync(adminUser, password);
+//        if (result.Succeeded)
+//        {
+//            await userManager.AddToRoleAsync(adminUser, SD.Role_Company);
+//            Console.WriteLine("Super Admin created successfully!");
+//        }
+//        else
+//        {
+//            Console.WriteLine("Failed to create Super Admin:");
+//            foreach (var error in result.Errors)
+//            {
+//                Console.WriteLine(error.Description);
+//            }
+//        }
+//    }
+//}
