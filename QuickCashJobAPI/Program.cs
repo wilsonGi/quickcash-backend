@@ -1,30 +1,25 @@
-﻿using Microsoft.EntityFrameworkCore;
-using QuickCashJobAPI.Data;
-using Microsoft.AspNetCore.Identity;
-using QuickCashJobAPI.Models;
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
-using QuickCashJobAPI.Services;
-using QuickCashJobAPI.Helpers;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using QuickCashBackend.Data;
+using QuickCashBackend.Helpers;
+using QuickCashBackend.Models;
+using QuickCashBackend.Services;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddDbContext<ApplicationDbContext>(option =>
+// Configure services
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    option.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
-builder.Services.AddScoped<IEmailSender, EmailService>();
-//builder.WebHost.UseUrls("http://localhost:7018");//emove this before deploymemt
-
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -40,8 +35,7 @@ builder.Services.AddAuthorization(options =>
             context.User.HasClaim(claim => claim.Type == "IsAdmin" && claim.Value == "True")));
 });
 
-
-// JWT Authentication
+// JWT Auth config
 var jwtSettings = builder.Configuration.GetSection("JWT");
 var key = Encoding.ASCII.GetBytes(jwtSettings.GetValue<string>("Secret"));
 
@@ -63,33 +57,15 @@ builder.Services.AddAuthentication(x =>
         ValidAudience = jwtSettings.GetValue<string>("ValidAudience"),
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
-
-    x.Events = new JwtBearerEvents
-    {
-        OnAuthenticationFailed = context =>
-        {
-            Console.WriteLine("OnAuthenticationFailed: " + context.Exception.Message);
-            return Task.CompletedTask;
-        },
-        OnTokenValidated = context =>
-        {
-            Console.WriteLine("OnTokenValidated: " + context.SecurityToken);
-            return Task.CompletedTask;
-        }
-    };
 });
 
 builder.Services.AddControllers().AddNewtonsoftJson();
 builder.Services.AddEndpointsApiExplorer();
-// Read API Key from appsettings.json or environment variable
-var apiKey = builder.Configuration.GetValue<string>("MTNMoMo:ApiKey") ?? Environment.GetEnvironmentVariable("MTN_MOMO_APIKEY");
-var encodedApiKey = ApiHelper.GetEncodedApiKey(apiKey); // Encode it
 
-// ✅ Print encoded API key to verify it's correct
+var apiKey = builder.Configuration.GetValue<string>("MTNMoMo:ApiKey") ?? Environment.GetEnvironmentVariable("MTN_MOMO_APIKEY");
+var encodedApiKey = ApiHelper.GetEncodedApiKey(apiKey);
 Console.WriteLine($"Encoded API Key: {encodedApiKey}");
 
-
-// Configure HTTP Client for MTN MoMo
 builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>(client =>
 {
     client.DefaultRequestHeaders.Add("Authorization", $"Basic {encodedApiKey}");
@@ -98,6 +74,7 @@ builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>(client =>
 
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<SubscriptionCheckService>();
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -125,31 +102,30 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 });
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        builder =>
-        {
-            builder.AllowAnyOrigin()
-                   .AllowAnyMethod()
-                   .AllowAnyHeader();
-        });
+    options.AddPolicy("AllowAll", builder =>
+    {
+        builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+    });
 });
 
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 var app = builder.Build();
 
+// Middleware pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.UseStaticFiles();  // Enable serving static files
+
+app.UseStaticFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
+    FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
     RequestPath = "/uploads"
 });
 
@@ -160,42 +136,38 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// This triggers seed on startup
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-    var context = services.GetRequiredService<ApplicationDbContext>();
-    await SeedSuperAdmin(userManager, roleManager, context);
-}
+// ✅ SEED SUPER ADMIN
+await SeedSuperAdmin(app.Services);
+
 app.Run();
 
-async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext context)
+async Task SeedSuperAdmin(IServiceProvider services)
 {
-    if (!userManager.Users.Any()) // Ensure no users exist before creating the first admin
+    using var scope = services.CreateScope();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    if (!userManager.Users.Any())
     {
-        var companyAdminEmail = Environment.GetEnvironmentVariable("COMPANY_ADMIN_EMAIL");
+        var email = Environment.GetEnvironmentVariable("COMPANY_ADMIN_EMAIL");
         var password = Environment.GetEnvironmentVariable("COMPANY_ADMIN_PASSWORD");
 
-        if (string.IsNullOrEmpty(companyAdminEmail) || string.IsNullOrEmpty(password))
+        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
         {
-            Console.WriteLine("Super Admin email or password is missing from environment variables.");
+            Console.WriteLine("Super Admin credentials not found in environment variables.");
             return;
         }
 
-        // Ensure roles exist
         if (!await roleManager.RoleExistsAsync(SD.Role_Company))
             await roleManager.CreateAsync(new IdentityRole(SD.Role_Company));
-
         if (!await roleManager.RoleExistsAsync(SD.Role_Admin))
             await roleManager.CreateAsync(new IdentityRole(SD.Role_Admin));
 
-
-        var adminUser = new ApplicationUser
+        var superAdmin = new ApplicationUser
         {
-            UserName = companyAdminEmail,
-            Email = companyAdminEmail,
+            UserName = email,
+            Email = email,
             Name = "Eric Mensah",
             Location = "Ghana",
             NumberOfTasksCompleted = 0,
@@ -205,23 +177,21 @@ async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleManager<
             UserRating = 100,
             DateJoined = DateTime.UtcNow,
             PhoneNumber = "0555179587",
-            IsAdmin = true, // Set to true for admin users
-            TrialEndDate = DateTime.MaxValue,
+            IsAdmin = true,
+            TrialEndDate = DateTime.MaxValue
         };
 
-        var result = await userManager.CreateAsync(adminUser, password);
+        var result = await userManager.CreateAsync(superAdmin, password);
         if (result.Succeeded)
         {
-            await userManager.AddToRoleAsync(adminUser, SD.Role_Company);
-            Console.WriteLine("Super Admin created successfully!");
+            await userManager.AddToRoleAsync(superAdmin, SD.Role_Company);
+            Console.WriteLine("✅ Super Admin created successfully!");
         }
         else
         {
-            Console.WriteLine("Failed to create Super Admin:");
+            Console.WriteLine("❌ Failed to create Super Admin:");
             foreach (var error in result.Errors)
-            {
-                Console.WriteLine(error.Description);
-            }
+                Console.WriteLine($"- {error.Description}");
         }
     }
 }
