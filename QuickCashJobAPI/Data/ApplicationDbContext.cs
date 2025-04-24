@@ -1,0 +1,252 @@
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using QuickCashJobAPI.Models;
+using QuickCashJobAPI.Models.DTO;
+using System.Buffers.Text;
+
+namespace QuickCashJobAPI.Data
+{
+    public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
+    {
+
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
+        {
+
+        }
+        public DbSet<Job> Jobs { get; set; }
+        public DbSet<ApplicationUser> ApplicationUsers { get; set; }
+        public DbSet<JobCommitment> JobCommitments { get; set; }
+        public DbSet<Category> Categories { get; set; }
+        public DbSet<Blog> blogs { get; set; }
+        public DbSet<PaymentRequest> PaymentRequests { get; set; }
+        public DbSet<Skill> Skills { get; set; }
+        public DbSet<UserSkill> UserSkills { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
+
+
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Category>().HasData(
+    new Category { Id = 17, CategoryName = "Automotive", NumberOfInstances = 0, CategoryImage = "/images/categories/automotive.png" },
+    new Category { Id = 18, CategoryName = "Education", NumberOfInstances = 0, CategoryImage = "/images/categories/education.png" },
+    new Category { Id = 19, CategoryName = "Engineering", NumberOfInstances = 0, CategoryImage = "/images/categories/engineering.png" },
+    new Category { Id = 20, CategoryName = "Finance & Accounting", NumberOfInstances = 0, CategoryImage = "/images/categories/finance_accounting.png" },
+    new Category { Id = 21, CategoryName = "Healthcare & Medicine", NumberOfInstances = 0, CategoryImage = "/images/categories/healthcare_medicine.png" },
+    new Category { Id = 22, CategoryName = "Hospitality & Tourism", NumberOfInstances = 0, CategoryImage = "/images/categories/hospitality_tourism.png" },
+    new Category { Id = 23, CategoryName = "Legal", NumberOfInstances = 0, CategoryImage = "/images/categories/legal.png" },
+    new Category { Id = 24, CategoryName = "Logistics & Transportation", NumberOfInstances = 0, CategoryImage = "/images/categories/logistics_transportation.png" },
+    new Category { Id = 25, CategoryName = "Manufacturing", NumberOfInstances = 0, CategoryImage = "/images/categories/manufacturing.png" },
+    new Category { Id = 26, CategoryName = "Marketing & Advertising", NumberOfInstances = 0, CategoryImage = "/images/categories/marketing_advertising.png" },
+    new Category { Id = 27, CategoryName = "Media & Entertainment", NumberOfInstances = 0, CategoryImage = "/images/categories/media_entertainment.png" },
+    new Category { Id = 28, CategoryName = "Mining & Energy", NumberOfInstances = 0, CategoryImage = "/images/categories/mining_energy.png" },
+    new Category { Id = 29, CategoryName = "NGOs & Nonprofits", NumberOfInstances = 0, CategoryImage = "/images/categories/ngos_nonprofits.png" },
+    new Category { Id = 30, CategoryName = "Office & Administration", NumberOfInstances = 0, CategoryImage = "/images/categories/office_administration.png" },
+    new Category { Id = 31, CategoryName = "Pharmaceutical", NumberOfInstances = 0, CategoryImage = "/images/categories/pharmaceutical.png" },
+    new Category { Id = 32, CategoryName = "Public Services & Government", NumberOfInstances = 0, CategoryImage = "/images/categories/public_services_government.png" },
+    new Category { Id = 33, CategoryName = "Real Estate", NumberOfInstances = 0, CategoryImage = "/images/categories/real_estate.png" },
+    new Category { Id = 34, CategoryName = "Retail", NumberOfInstances = 0, CategoryImage = "/images/categories/retail.png" },
+    new Category { Id = 35, CategoryName = "Science & Research", NumberOfInstances = 0, CategoryImage = "/images/categories/science_research.png" },
+    new Category { Id = 36, CategoryName = "Security Services", NumberOfInstances = 0, CategoryImage = "/images/categories/security_services.png" },
+    new Category { Id = 37, CategoryName = "Social Work", NumberOfInstances = 0, CategoryImage = "/images/categories/social_work.png" },
+    new Category { Id = 38, CategoryName = "Software Development", NumberOfInstances = 0, CategoryImage = "/images/categories/software_development.png" },
+    new Category { Id = 39, CategoryName = "Sports & Fitness", NumberOfInstances = 0, CategoryImage = "/images/categories/sports_fitness.png" },
+    new Category { Id = 40, CategoryName = "Telecommunications", NumberOfInstances = 0, CategoryImage = "/images/categories/telecommunications.png" },
+    new Category { Id = 41, CategoryName = "Trades & Technical Services", NumberOfInstances = 0, CategoryImage = "/images/categories/trades_technical.png" },
+    new Category { Id = 42, CategoryName = "Writing & Translation", NumberOfInstances = 0, CategoryImage = "/images/categories/writing_translation.png" },
+    new Category { Id = 43, CategoryName = "Event Planning & Services", NumberOfInstances = 0, CategoryImage = "/images/categories/event_planning.png" },
+    new Category { Id = 44, CategoryName = "Customer Service", NumberOfInstances = 0, CategoryImage = "/images/categories/customer_service.png" },
+    new Category { Id = 45, CategoryName = "Cleaning & Housekeeping", NumberOfInstances = 0, CategoryImage = "/images/categories/cleaning_housekeeping.png" },
+    new Category { Id = 46, CategoryName = "Food Services & Catering", NumberOfInstances = 0, CategoryImage = "/images/categories/food_services.png" },
+    new Category { Id = 47, CategoryName = "Virtual Assistance", NumberOfInstances = 0, CategoryImage = "/images/categories/virtual_assistance.png" },
+    new Category { Id = 48, CategoryName = "Freelancing & Gig Work", NumberOfInstances = 0, CategoryImage = "/images/categories/freelancing_gig_work.png" }
+);
+
+            // Skills seed
+            modelBuilder.Entity<Skill>().HasData(
+    new Skill { Id = 1, Name = "Plumbing" },
+    new Skill { Id = 2, Name = "Electrical Work" },
+    new Skill { Id = 3, Name = "Carpentry" },
+    new Skill { Id = 4, Name = "Masonry" },
+    new Skill { Id = 5, Name = "Painting" },
+    new Skill { Id = 6, Name = "Welding" },
+    new Skill { Id = 7, Name = "Landscaping" },
+    new Skill { Id = 8, Name = "Roofing" },
+    new Skill { Id = 9, Name = "HVAC Repair" },
+    new Skill { Id = 10, Name = "Cleaning Services" },
+    new Skill { Id = 11, Name = "Cooking" },
+    new Skill { Id = 12, Name = "Hairdressing" },
+    new Skill { Id = 13, Name = "Barbering" },
+    new Skill { Id = 14, Name = "Makeup Artistry" },
+    new Skill { Id = 15, Name = "Fashion Design" },
+    new Skill { Id = 16, Name = "Tailoring" },
+    new Skill { Id = 17, Name = "Driving" },
+    new Skill { Id = 18, Name = "Auto Mechanic" },
+    new Skill { Id = 19, Name = "Photography" },
+    new Skill { Id = 20, Name = "Videography" },
+    new Skill { Id = 21, Name = "Graphic Design" },
+    new Skill { Id = 22, Name = "UI/UX Design" },
+    new Skill { Id = 23, Name = "Web Development" },
+    new Skill { Id = 24, Name = "Mobile App Development" },
+    new Skill { Id = 25, Name = "Software Engineering" },
+    new Skill { Id = 26, Name = "Data Analysis" },
+    new Skill { Id = 27, Name = "Machine Learning" },
+    new Skill { Id = 28, Name = "Digital Marketing" },
+    new Skill { Id = 29, Name = "Social Media Management" },
+    new Skill { Id = 30, Name = "SEO Optimization" },
+    new Skill { Id = 31, Name = "Translation" },
+    new Skill { Id = 32, Name = "Tutoring" },
+    new Skill { Id = 33, Name = "Accounting" },
+    new Skill { Id = 34, Name = "Bookkeeping" },
+    new Skill { Id = 35, Name = "Legal Services" },
+    new Skill { Id = 36, Name = "Event Planning" },
+    new Skill { Id = 37, Name = "Customer Support" },
+    new Skill { Id = 38, Name = "Project Management" },
+    new Skill { Id = 39, Name = "Content Writing" },
+    new Skill { Id = 40, Name = "Copywriting" },
+    new Skill { Id = 41, Name = "Blogging" },
+    new Skill { Id = 42, Name = "Fitness Training" },
+    new Skill { Id = 43, Name = "Yoga Instruction" },
+    new Skill { Id = 44, Name = "Massage Therapy" },
+    new Skill { Id = 45, Name = "Housekeeping" },
+    new Skill { Id = 46, Name = "Security Services" },
+    new Skill { Id = 47, Name = "Babysitting" },
+    new Skill { Id = 48, Name = "Elderly Care" },
+    new Skill { Id = 49, Name = "Pet Sitting" },
+    new Skill { Id = 50, Name = "Delivery Services" },
+    new Skill { Id = 51, Name = "Calligraphy" },
+    new Skill { Id = 52, Name = "Jewelry Making" },
+    new Skill { Id = 53, Name = "Soap Making" },
+    new Skill { Id = 54, Name = "Crafts & DIY" },
+    new Skill { Id = 55, Name = "Tattoo Artist" },
+    new Skill { Id = 56, Name = "DJ Services" },
+    new Skill { Id = 57, Name = "Music Production" },
+    new Skill { Id = 58, Name = "Instrument Lessons" },
+    new Skill { Id = 59, Name = "Voice Coaching" },
+    new Skill { Id = 60, Name = "Singing" },
+    new Skill { Id = 61, Name = "Acting" },
+    new Skill { Id = 62, Name = "Baking" },
+    new Skill { Id = 63, Name = "Bartending" },
+    new Skill { Id = 64, Name = "Interior Decorating" },
+    new Skill { Id = 65, Name = "Home Renovation" },
+    new Skill { Id = 66, Name = "Pool Maintenance" },
+    new Skill { Id = 67, Name = "Furniture Assembly" },
+    new Skill { Id = 68, Name = "Tech Support" },
+    new Skill { Id = 69, Name = "Network Installation" },
+    new Skill { Id = 70, Name = "Cybersecurity" },
+    new Skill { Id = 71, Name = "Cloud Computing" },
+    new Skill { Id = 72, Name = "Blockchain Development" },
+    new Skill { Id = 73, Name = "Game Development" },
+    new Skill { Id = 74, Name = "Animation" },
+    new Skill { Id = 75, Name = "3D Modeling" },
+    new Skill { Id = 76, Name = "Drone Services" },
+    new Skill { Id = 77, Name = "Virtual Assistance" },
+    new Skill { Id = 78, Name = "Business Consulting" },
+    new Skill { Id = 79, Name = "Financial Planning" },
+    new Skill { Id = 80, Name = "Real Estate Agent" },
+    new Skill { Id = 81, Name = "Tax Preparation" },
+    new Skill { Id = 82, Name = "Medical Transcription" },
+    new Skill { Id = 83, Name = "Remote Tech Support" },
+    new Skill { Id = 84, Name = "Proofreading" },
+    new Skill { Id = 85, Name = "Editing" },
+    new Skill { Id = 86, Name = "Resume Writing" },
+    new Skill { Id = 87, Name = "Career Coaching" },
+    new Skill { Id = 88, Name = "Public Speaking" },
+    new Skill { Id = 89, Name = "Life Coaching" },
+    new Skill { Id = 90, Name = "Health Coaching" },
+    new Skill { Id = 91, Name = "Nutritionist" },
+    new Skill { Id = 92, Name = "Diet Planning" },
+    new Skill { Id = 93, Name = "Virtual Fitness Coaching" },
+    new Skill { Id = 94, Name = "Research Assistance" },
+    new Skill { Id = 95, Name = "Survey Conduction" },
+    new Skill { Id = 96, Name = "Market Research" },
+    new Skill { Id = 97, Name = "Inventory Management" },
+    new Skill { Id = 98, Name = "Sales & Lead Generation" },
+    new Skill { Id = 99, Name = "Telemarketing" },
+    new Skill { Id = 100, Name = "Voice-over Acting" }
+);
+
+
+            //            modelBuilder.Entity<Category>().HasData(
+            //    new Category { Id = 1, CategoryName = "Agriculture", NumberOfInstances = 0, CategoryImage = "/images/categories/agriculture.png" },
+            //    new Category { Id = 2, CategoryName = "Animal Care", NumberOfInstances = 0, CategoryImage = "/images/categories/animal_care.png" },
+            //    new Category { Id = 3, CategoryName = "Architecture", NumberOfInstances = 0, CategoryImage = "/images/categories/architecture.png" },
+            //    new Category { Id = 4, CategoryName = "Arts & Design", NumberOfInstances = 0, CategoryImage = "/images/categories/arts_design.png" },
+            //    new Category { Id = 5, CategoryName = "Beauty & Wellness", NumberOfInstances = 0, CategoryImage = "/images/categories/beauty_wellness.png" },
+            //    new Category { Id = 6, CategoryName = "Business & Consulting", NumberOfInstances = 0, CategoryImage = "/images/categories/business_consulting.png" },
+            //    new Category { Id = 7, CategoryName = "Construction", NumberOfInstances = 0, CategoryImage = "/images/categories/construction.png" },
+            //    new Category { Id = 8, CategoryName = "Delivery Services", NumberOfInstances = 0, CategoryImage = "/images/categories/delivery_services.png" },
+            //    new Category { Id = 9, CategoryName = "Domestic Services", NumberOfInstances = 0, CategoryImage = "/images/categories/domestic_services.png" },
+            //    new Category { Id = 10, CategoryName = "Electrical", NumberOfInstances = 0, CategoryImage = "/images/categories/electrical.png" },
+            //    new Category { Id = 11, CategoryName = "Electronics Repair", NumberOfInstances = 0, CategoryImage = "/images/categories/electronics_repair.png" },
+            //    new Category { Id = 12, CategoryName = "Fashion & Tailoring", NumberOfInstances = 0, CategoryImage = "/images/categories/fashion_tailoring.png" },
+            //    new Category { Id = 13, CategoryName = "Fisheries", NumberOfInstances = 0, CategoryImage = "/images/categories/fisheries.png" },
+            //    new Category { Id = 14, CategoryName = "Hairdressing & Barbering", NumberOfInstances = 0, CategoryImage = "/images/categories/hairdressing_barbering.png" },
+            //    new Category { Id = 15, CategoryName = "Handyman Services", NumberOfInstances = 0, CategoryImage = "/images/categories/handyman_services.png" },
+            //    new Category { Id = 16, CategoryName = "IT Support & Networking", NumberOfInstances = 0, CategoryImage = "/images/categories/it_support.png" },
+            //    new Category { Id = 17, CategoryName = "Automotive", NumberOfInstances = 0, CategoryImage = "/images/categories/automotive.png" },
+            //    new Category { Id = 18, CategoryName = "Education", NumberOfInstances = 0, CategoryImage = "/images/categories/education.png" },
+            //    new Category { Id = 19, CategoryName = "Engineering", NumberOfInstances = 0, CategoryImage = "/images/categories/engineering.png" },
+            //    new Category { Id = 20, CategoryName = "Finance & Accounting", NumberOfInstances = 0, CategoryImage = "/images/categories/finance_accounting.png" },
+            //    new Category { Id = 21, CategoryName = "Healthcare & Medicine", NumberOfInstances = 0, CategoryImage = "/images/categories/healthcare_medicine.png" },
+            //    new Category { Id = 22, CategoryName = "Hospitality & Tourism", NumberOfInstances = 0, CategoryImage = "/images/categories/hospitality_tourism.png" },
+            //    new Category { Id = 23, CategoryName = "Legal", NumberOfInstances = 0, CategoryImage = "/images/categories/legal.png" },
+            //    new Category { Id = 24, CategoryName = "Logistics & Transportation", NumberOfInstances = 0, CategoryImage = "/images/categories/logistics_transportation.png" },
+            //    new Category { Id = 25, CategoryName = "Manufacturing", NumberOfInstances = 0, CategoryImage = "/images/categories/manufacturing.png" },
+            //    new Category { Id = 26, CategoryName = "Marketing & Advertising", NumberOfInstances = 0, CategoryImage = "/images/categories/marketing_advertising.png" },
+            //    new Category { Id = 27, CategoryName = "Media & Entertainment", NumberOfInstances = 0, CategoryImage = "/images/categories/media_entertainment.png" },
+            //    new Category { Id = 28, CategoryName = "Mining & Energy", NumberOfInstances = 0, CategoryImage = "/images/categories/mining_energy.png" },
+            //    new Category { Id = 29, CategoryName = "NGOs & Nonprofits", NumberOfInstances = 0, CategoryImage = "/images/categories/ngos_nonprofits.png" },
+            //    new Category { Id = 30, CategoryName = "Office & Administration", NumberOfInstances = 0, CategoryImage = "/images/categories/office_administration.png" },
+            //    new Category { Id = 31, CategoryName = "Pharmaceutical", NumberOfInstances = 0, CategoryImage = "/images/categories/pharmaceutical.png" },
+            //    new Category { Id = 32, CategoryName = "Public Services & Government", NumberOfInstances = 0, CategoryImage = "/images/categories/public_services_government.png" },
+            //    new Category { Id = 33, CategoryName = "Real Estate", NumberOfInstances = 0, CategoryImage = "/images/categories/real_estate.png" },
+            //    new Category { Id = 34, CategoryName = "Retail", NumberOfInstances = 0, CategoryImage = "/images/categories/retail.png" },
+            //    new Category { Id = 35, CategoryName = "Science & Research", NumberOfInstances = 0, CategoryImage = "/images/categories/science_research.png" },
+            //    new Category { Id = 36, CategoryName = "Security Services", NumberOfInstances = 0, CategoryImage = "/images/categories/security_services.png" }
+            //);
+
+
+
+
+            //Configure the Payout property
+            modelBuilder.Entity<Job>()
+           .Property(j => j.Payout)
+           .HasColumnType("float"); // Change to float for double
+
+
+            modelBuilder.Entity<PaymentRequest>()
+                .HasKey(p => p.Id); // Assuming 'Id' is your primary key
+
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<JobCommitment>()
+                .HasOne(jc => jc.Job)
+                .WithMany(j => j.JobCommitments)
+                .HasForeignKey(jc => jc.JobId)
+                .OnDelete(DeleteBehavior.NoAction); // Prevents cascade delete for jobs
+
+            modelBuilder.Entity<JobCommitment>()
+                .HasOne(jc => jc.Contractor)
+                .WithMany(u => u.JobCommitments)
+                .HasForeignKey(jc => jc.ContractorId)
+                .OnDelete(DeleteBehavior.Cascade); // Allows cascade delete for contractors
+
+            modelBuilder.Entity<UserSkill>()
+            .HasKey(us => new { us.UserId, us.SkillId });
+
+            modelBuilder.Entity<UserSkill>()
+                .HasOne(us => us.User)
+                .WithMany(u => u.UserSkills)
+                .HasForeignKey(us => us.UserId);
+
+            modelBuilder.Entity<UserSkill>()
+                .HasOne(us => us.Skill)
+                .WithMany(s => s.UserSkills)
+                .HasForeignKey(us => us.SkillId);
+        }
+    }
+}

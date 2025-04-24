@@ -1,0 +1,6 @@
+@QuickCashJobAPI_HostAddress = http://localhost:5114
+
+GET {{QuickCashJobAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
