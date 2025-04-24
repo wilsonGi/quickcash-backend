@@ -96,11 +96,11 @@ namespace QuickCashJobAPI.Controllers
             }
 
             // Check if the device ID already exists (useful for preventing multiple registrations from the same device)
-            //var existingDevice = _userManager.Users.FirstOrDefault(u => u.DeviceId == registerModel.DeviceId);
-            //if (existingDevice != null)
-            //{
-            //    return BadRequest(new { message = "Registration from this device is already used." });
-            //}
+            var existingDevice = _userManager.Users.FirstOrDefault(u => u.DeviceId == registerModel.DeviceId);
+            if (existingDevice != null)
+            {
+                return BadRequest(new { message = "Registration from this device is already used." });
+            }
 
 
             var user = new ApplicationUser
