@@ -185,71 +185,80 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-        // Admin Registration Endpoint
         [HttpPost("register-admin")]
         public async Task<IActionResult> RegisterAdmin([FromForm] RegisterModel registerModel)
         {
-            if (!ModelState.IsValid)
+            try
             {
-                return BadRequest(ModelState);
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                var adminUser = new ApplicationUser
+                {
+                    UserName = registerModel.Email,
+                    Email = registerModel.Email,
+                    Name = registerModel.Name,
+                    Location = registerModel.Location,
+                    NumberOfTasksCompleted = 0,
+                    NumberOfTasksEmployed = 0,
+                    LastTaskDoneDate = registerModel.LastTaskDoneDate,
+                    LastTaskEmployedDate = registerModel.LastTaskEmployedDate,
+                    UserRating = 0,
+                    DateJoined = registerModel.DateJoined,
+                    PhoneNumber = registerModel.PhoneNumber,
+                    IsAdmin = true,
+                    TrialEndDate = DateTime.UtcNow.AddDays(30),
+                    DeviceId = registerModel.DeviceId
+                };
+
+                if (registerModel.ProfilePhoto != null)
+                {
+                    using var memoryStream = new MemoryStream();
+                    await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
+                    adminUser.ProfilePhoto = memoryStream.ToArray();
+                }
+
+                var result = await _userManager.CreateAsync(adminUser, registerModel.Password);
+
+                if (!result.Succeeded)
+                {
+                    return BadRequest(result.Errors);
+                }
+
+                await _userManager.AddToRoleAsync(adminUser, "Admin");
+
+                await _emailSender.SendEmailAsync(adminUser.Email, "Admin Registration Successful",
+                    $"Dear {adminUser.Name},<br><br>Your admin account has been successfully created.<br>" +
+                    $"<strong>Email:</strong> {adminUser.Email}<br>" +
+                    $"Please log in and set up your account.<br><br>Thank you!");
+
+                var userId = await _userManager.GetUserIdAsync(adminUser);
+                var code = await _userManager.GenerateEmailConfirmationTokenAsync(adminUser);
+                code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+                var callbackUrl = Url.Page(
+                    "/Account/ConfirmEmail",
+                    pageHandler: null,
+                    values: new { area = "Identity", userId, code },
+                    protocol: Request.Scheme);
+
+                await _emailSender.SendEmailAsync(adminUser.Email, "Confirm Your Email",
+                    $"Dear {adminUser.Name},<br><br>Please confirm your email by clicking <a href='{callbackUrl}'>here</a>.<br><br>Thank you!");
+
+                return Ok(new { message = "Admin registered successfully. Please confirm your email." });
             }
-
-            var adminUser = new ApplicationUser
+            catch (Exception ex)
             {
-                UserName = registerModel.Email,
-                Email = registerModel.Email,
-                Name = registerModel.Name,
-                Location = registerModel.Location,
-                NumberOfTasksCompleted = 0,
-                NumberOfTasksEmployed = 0,
-                LastTaskDoneDate = registerModel.LastTaskDoneDate,
-                LastTaskEmployedDate = registerModel.LastTaskEmployedDate,
-                UserRating = 0,
-                DateJoined = registerModel.DateJoined,
-                PhoneNumber = registerModel.PhoneNumber,
-                IsAdmin = true, // Set to true for admin users
-                TrialEndDate = DateTime.UtcNow.AddDays(30),
-                 DeviceId = registerModel.DeviceId // Store the device ID
-            };
+                // Log the full error to console or logger
+                Console.WriteLine($"❌ Registration failed: {ex.Message} \n {ex.StackTrace}");
 
-            if (registerModel.ProfilePhoto != null)
-            {
-                using var memoryStream = new MemoryStream();
-                await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
-                adminUser.ProfilePhoto = memoryStream.ToArray(); // Add this to ApplicationUser model
-                await _userManager.UpdateAsync(adminUser);
+                return StatusCode(500, new
+                {
+                    error = "Something went wrong during registration.",
+                    details = ex.Message
+                });
             }
-
-
-            var result = await _userManager.CreateAsync(adminUser, registerModel.Password);
-
-            if (!result.Succeeded)
-            {
-                return BadRequest(result.Errors);
-            }
-
-            await _userManager.AddToRoleAsync(adminUser, "Admin");
-
-            // ✅ Send Email Notification
-            await _emailSender.SendEmailAsync(adminUser.Email, "Admin Registration Successful",
-                $"Dear {adminUser.Name},<br><br>Your admin account has been successfully created.<br>" +
-                $"<strong>Email:</strong> {adminUser.Email}<br>" +
-                $"Please log in and set up your account.<br><br>Thank you!");
-
-            // ✅ Optional: Send Email Confirmation
-            var userId = await _userManager.GetUserIdAsync(adminUser);
-            var code = await _userManager.GenerateEmailConfirmationTokenAsync(adminUser);
-            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-            var callbackUrl = Url.Page(
-                "/Account/ConfirmEmail",
-                pageHandler: null,
-                values: new { area = "Identity", userId, code },
-                protocol: Request.Scheme);
-
-            await _emailSender.SendEmailAsync(adminUser.Email, "Confirm Your Email",
-                $"Dear {adminUser.Name},<br><br>Please confirm your email by clicking <a href='{callbackUrl}'>here</a>.<br><br>Thank you!");
-
-            return Ok(new { message = "Admin registered successfully. Please confirm your email." });
         }
 
 
