@@ -189,8 +189,8 @@ namespace QuickCashJobAPI.Controllers
         [HttpPost("register-admin")]
         public async Task<IActionResult> RegisterAdmin([FromQuery] string adminSecret, [FromForm] RegisterModel registerModel)
         {
-            if (registerModel.adminSecret != "stars!nth3sky")
-                return Unauthorized("Unauthorized admin registration attempt.");
+            //if (registerModel.adminSecret != "stars!nth3sky")
+            //    return Unauthorized("Unauthorized admin registration attempt.");
 
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -302,7 +302,7 @@ namespace QuickCashJobAPI.Controllers
             [MaxLength(100)]
             public string Location { get; set; }
 
-            public string adminSecret { get; set; }
+            //public string adminSecret { get; set; }
 
             [Required]
             public DateTime LastTaskDoneDate { get; set; } = DateTime.Now;
