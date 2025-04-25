@@ -15,7 +15,7 @@ using System.Security.Claims;
 namespace QuickCashJobAPI.Controllers
 {
 
-    [Authorize(Policy = "AdminPolicy")]
+    //[Authorize(Policy = "AdminPolicy")]
     [ApiController]
     [Route("api/[controller]")]
     public class UserController : ControllerBase

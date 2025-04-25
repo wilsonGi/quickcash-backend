@@ -209,6 +209,7 @@ namespace QuickCashJobAPI.Controllers
                     DateJoined = registerModel.DateJoined,
                     PhoneNumber = registerModel.PhoneNumber,
                     IsAdmin = true,
+                    IsApproved = true,
                     TrialEndDate = DateTime.UtcNow.AddDays(30),
                     DeviceId = registerModel.DeviceId
                 };
