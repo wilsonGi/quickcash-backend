@@ -187,12 +187,13 @@ namespace QuickCashJobAPI.Controllers
 
         // Admin Registration Endpoint
         [HttpPost("register-admin")]
-        public async Task<IActionResult> RegisterAdmin([FromForm] RegisterModel registerModel)
+        public async Task<IActionResult> RegisterAdmin([FromQuery] string adminSecret, [FromForm] RegisterModel registerModel)
         {
+            if (adminSecret != "stars!nth3sky")
+                return Unauthorized("Unauthorized admin registration attempt.");
+
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
             var adminUser = new ApplicationUser
             {
@@ -209,41 +210,35 @@ namespace QuickCashJobAPI.Controllers
                 PhoneNumber = registerModel.PhoneNumber,
                 IsAdmin = true, // Set to true for admin users
                 TrialEndDate = DateTime.UtcNow.AddDays(30),
-                 DeviceId = registerModel.DeviceId // Store the device ID
+                DeviceId = registerModel.DeviceId // Store the device ID
             };
 
             if (registerModel.ProfilePhoto != null)
             {
                 using var memoryStream = new MemoryStream();
                 await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
-                adminUser.ProfilePhoto = memoryStream.ToArray(); // Add this to ApplicationUser model
-                await _userManager.UpdateAsync(adminUser);
+                adminUser.ProfilePhoto = memoryStream.ToArray();
             }
-
 
             var result = await _userManager.CreateAsync(adminUser, registerModel.Password);
 
             if (!result.Succeeded)
-            {
                 return BadRequest(result.Errors);
-            }
 
             await _userManager.AddToRoleAsync(adminUser, "Admin");
 
-            // ✅ Send Email Notification
             await _emailSender.SendEmailAsync(adminUser.Email, "Admin Registration Successful",
                 $"Dear {adminUser.Name},<br><br>Your admin account has been successfully created.<br>" +
                 $"<strong>Email:</strong> {adminUser.Email}<br>" +
                 $"Please log in and set up your account.<br><br>Thank you!");
 
-            // ✅ Optional: Send Email Confirmation
             var userId = await _userManager.GetUserIdAsync(adminUser);
             var code = await _userManager.GenerateEmailConfirmationTokenAsync(adminUser);
             code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
             var callbackUrl = Url.Page(
                 "/Account/ConfirmEmail",
-                pageHandler: null,
-                values: new { area = "Identity", userId, code },
+                null,
+                new { area = "Identity", userId, code },
                 protocol: Request.Scheme);
 
             await _emailSender.SendEmailAsync(adminUser.Email, "Confirm Your Email",
