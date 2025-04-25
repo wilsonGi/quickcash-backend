@@ -302,6 +302,7 @@ namespace QuickCashJobAPI.Controllers
             [MaxLength(100)]
             public string Location { get; set; }
 
+            public string adminSecret { get; set; }
 
             [Required]
             public DateTime LastTaskDoneDate { get; set; } = DateTime.Now;
