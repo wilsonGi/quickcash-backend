@@ -210,6 +210,7 @@ namespace QuickCashJobAPI.Controllers
                     PhoneNumber = registerModel.PhoneNumber,
                     IsAdmin = true,
                     IsApproved = true,
+                    IsSubscriptionActive = true,
                     TrialEndDate = DateTime.UtcNow.AddDays(30),
                     DeviceId = registerModel.DeviceId
                 };
