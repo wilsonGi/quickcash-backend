@@ -178,8 +178,9 @@ namespace QuickCashJobAPI.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"Error during registration: {ex.Message} - {ex.StackTrace}");
-                return StatusCode(500, new { message = "An unexpected error occurred during registration." });
+                return StatusCode(500, new { message = ex.Message });
             }
+
         }
 
 
