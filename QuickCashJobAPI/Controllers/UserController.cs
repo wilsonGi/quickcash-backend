@@ -143,35 +143,57 @@ namespace QuickCashJobAPI.Controllers
         [HttpPost("ApproveUser/{userId}")]
         public async Task<IActionResult> ApproveUser(string userId)
         {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
+            try
             {
-                return NotFound("User not found.");
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
+                {
+                    Console.WriteLine($"ApproveUser failed: No user found with ID {userId}.");
+                    return NotFound("User not found.");
+                }
+
+                user.IsApproved = true;
+                user.IsSubscriptionActive = true;
+                var result = await _userManager.UpdateAsync(user);
+
+                if (!result.Succeeded)
+                {
+                    Console.WriteLine($"ApproveUser failed: UpdateAsync errors - {string.Join("; ", result.Errors.Select(e => e.Description))}");
+                    return BadRequest(new { message = "Failed to approve user.", errors = result.Errors });
+                }
+
+                try
+                {
+                    // Generate email confirmation token
+                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+
+                    var callbackUrl = $"{Request.Scheme}://{Request.Host}/api/Account/ConfirmEmail?userId={user.Id}&code={code}";
+
+                    // Send approval email
+                    await _emailSender.SendEmailAsync(user.Email, "You have been approved!",
+                        $"Dear {user.UserName},<br><br>Congratulations! You have been approved and now have full access to the system.<br>" +
+                        $"To confirm your email and activate your account, please <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>click here</a>.<br><br>" +
+                        $"Welcome to the Splxit Creativity Arena and Rewards System!<br><br>Thank you!");
+
+                    Console.WriteLine($"Approval email sent successfully to {user.Email}.");
+                }
+                catch (Exception emailEx)
+                {
+                    Console.WriteLine($"ApproveUser warning: Failed to send approval email to {user.Email}. Error: {emailEx.Message}");
+                    // Still approve the user even if email fails
+                }
+
+                Console.WriteLine($"User {user.Email} approved successfully.");
+                return Ok(new { message = "User approved successfully, and a confirmation email has been sent (if possible)." });
             }
-
-            user.IsApproved = true;
-            user.IsSubscriptionActive = true;
-            var result = await _userManager.UpdateAsync(user);
-
-            if (!result.Succeeded)
+            catch (Exception ex)
             {
-                return BadRequest("Failed to approve user.");
+                Console.WriteLine($"Critical error in ApproveUser: {ex.Message} - {ex.StackTrace}");
+                return StatusCode(500, new { message = "An unexpected error occurred during user approval." });
             }
-
-            // ✅ Generate email confirmation token
-            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-
-            var callbackUrl = $"{Request.Scheme}://{Request.Host}/api/Account/ConfirmEmail?userId={user.Id}&code={code}";
-
-            // ✅ Send approval email
-            await _emailSender.SendEmailAsync(user.Email, "You have been approved!",
-                $"Dear {user.UserName},<br><br>Congratulations! You have been approved and now have full access to the system.<br>" +
-                $"To confirm your email and activate your account, please <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>click here</a>.<br><br>" +
-                $"Welcome to the Splxit Creativity Arena and Rewards System!<br><br>Thank you!");
-
-            return Ok("User approved successfully, and a confirmation email has been sent.");
         }
+
 
 
         [HttpPost("DisapproveUser/{userId}")]
