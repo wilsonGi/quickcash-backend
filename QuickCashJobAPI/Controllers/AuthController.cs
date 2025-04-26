@@ -121,13 +121,7 @@ namespace QuickCashJobAPI.Controllers
 
             };
 
-            if (registerModel.ProfilePhoto != null)
-            {
-                using var memoryStream = new MemoryStream();
-                await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
-                user.ProfilePhoto = memoryStream.ToArray(); // Add this to ApplicationUser model
-                await _userManager.UpdateAsync(user);
-            }
+           
 
 
 
@@ -136,6 +130,14 @@ namespace QuickCashJobAPI.Controllers
             if (!result.Succeeded)
             {
                 return BadRequest(result.Errors);
+            }
+
+            if (registerModel.ProfilePhoto != null)
+            {
+                using var memoryStream = new MemoryStream();
+                await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
+                user.ProfilePhoto = memoryStream.ToArray(); // Add this to ApplicationUser model
+                await _userManager.UpdateAsync(user);
             }
 
             var role = registerModel.IsAdmin ? "Admin" : "Customer";
