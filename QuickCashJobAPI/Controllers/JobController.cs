@@ -312,7 +312,7 @@ namespace QuickCashJobAPI.Controllers
                     Description = job.Description,
                     Location = job.Location,
                     Status = job.Status,
-                    DatePosted = job.DatePosted,
+                    DatePosted = DateTime.SpecifyKind(job.DatePosted, DateTimeKind.Utc),
                     AudioDescription = job.AudioDescription,
                     Payout = job.Payout,
                     Negotiable = job.Negotiable,
@@ -325,6 +325,7 @@ namespace QuickCashJobAPI.Controllers
                     UserPhoneNumber = job.UserPhoneNumber,
                     ShowContact = job.ShowContact,
                 }).ToList();
+
 
             return Ok(jobs);
         }
@@ -398,8 +399,8 @@ namespace QuickCashJobAPI.Controllers
                 Negotiable = jobCreateDTO.Negotiable,
                 UserLocation = user.Location,
                 UserName = user.Name,
-                UserLastTaskDoneDate = user.LastTaskDoneDate,
-                UserLastTaskEmployedDate = user.LastTaskEmployedDate,
+                UserLastTaskDoneDate = DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc),
+                UserLastTaskEmployedDate = DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc),
                 UserRating = user.UserRating,
                 UserPhoneNumber = user.PhoneNumber,
                 UserId = user.Id // Set the UserId
