@@ -74,116 +74,112 @@ namespace QuickCashJobAPI.Controllers
 
         // User Registration Endpoint
         [HttpPost("register")]
-       public async Task<IActionResult> Register([FromForm] RegisterModel registerModel)
+        public async Task<IActionResult> Register([FromForm] RegisterModel registerModel)
         {
-            if (!ModelState.IsValid)
+            try
             {
-                return BadRequest(ModelState);
-            }
-
-            // Check if the email already exists
-            var existingUser = await _userManager.FindByEmailAsync(registerModel.Email);
-            if (existingUser != null)
-            {
-                return BadRequest(new { message = "This email is already registered." });
-            }
-
-            // Check if the phone number already exists
-            var existingPhone = _userManager.Users.FirstOrDefault(u => u.PhoneNumber == registerModel.PhoneNumber);
-            if (existingPhone != null)
-            {
-                return BadRequest(new { message = "This phone number is already registered." });
-            }
-
-            // Check if the device ID already exists (useful for preventing multiple registrations from the same device)
-            var existingDevice = _userManager.Users.FirstOrDefault(u => u.DeviceId == registerModel.DeviceId);
-            if (existingDevice != null)
-            {
-                return BadRequest(new { message = "Registration from this device is already used." });
-            }
-
-
-            var user = new ApplicationUser
-            {
-                UserName = registerModel.Email,
-                Email = registerModel.Email,
-                Name = registerModel.Name,
-                Location = registerModel.Location,
-                NumberOfTasksCompleted = 0,
-                NumberOfTasksEmployed = 0,
-                LastTaskDoneDate = registerModel.LastTaskDoneDate,
-                LastTaskEmployedDate = registerModel.LastTaskEmployedDate,
-                DateJoined = registerModel.DateJoined,
-                PhoneNumber = registerModel.PhoneNumber,
-                IsAdmin = false, // Default to false for standard users
-                TrialEndDate = DateTime.UtcNow.AddDays(30),
-                DeviceId = registerModel.DeviceId // Store the device ID
-
-            };
-
-           
-
-
-
-            var result = await _userManager.CreateAsync(user, registerModel.Password);
-
-            if (!result.Succeeded)
-            {
-                return BadRequest(result.Errors);
-            }
-
-            if (registerModel.ProfilePhoto != null)
-            {
-                using var memoryStream = new MemoryStream();
-                await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
-                user.ProfilePhoto = memoryStream.ToArray(); // Add this to ApplicationUser model
-                await _userManager.UpdateAsync(user);
-            }
-
-            var role = registerModel.IsAdmin ? "Admin" : "Customer";
-            await _userManager.AddToRoleAsync(user, role);
-
-            // Email Sending Logic BEFORE returning response
-            if (!user.IsApproved)
-            {
-                await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
-                $"Dear {user.Name}, <br><br>Your registration is successful," +
-                 $"<strong>Email:</strong> {user.Email}<br>" +
-                $" Please wait for approval to get full access. Thank you.");
-
-                return Ok(new { message = "User registered successfully, pending approval" });
-            }
-
-            if (user.IsApproved)
-            {
-                await _emailSender.SendEmailAsync(user.Email, "Welcome to the System",
-                $"Dear {user.UserName}, <br><br>Your account has been created.<br><br>" +
-                $"Please log in and change your password immediately.<br><br>Thank you!");
-
-                // Send email confirmation
-                var userId = await _userManager.GetUserIdAsync(user);
-                var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-                var callbackUrl = Url.Page(
-                    "/Account/ConfirmEmail",
-                    pageHandler: null,
-                    values: new { area = "Identity", userId, code },
-                    protocol: Request.Scheme);
-
-                await _emailSender.SendEmailAsync(user.Email, "Welcome to the app",
-                $"Dear {user.Name}, <br><br>Welcome to Quick Cash Job app! You have been approved as a user.");
-
-                if (_userManager.Options.SignIn.RequireConfirmedAccount)
+                if (!ModelState.IsValid)
                 {
-                    return Ok(new { message = "User registered successfully. Please confirm your email." });
+                    Console.WriteLine("ModelState is invalid: " + string.Join("; ", ModelState.Values
+                        .SelectMany(x => x.Errors)
+                        .Select(x => x.ErrorMessage)));
+                    return BadRequest(ModelState);
                 }
 
-                await _signInManager.SignInAsync(user, isPersistent: false);
-                return Ok(new { message = "User registered and signed in successfully" });
+                var existingUser = await _userManager.FindByEmailAsync(registerModel.Email);
+                if (existingUser != null)
+                {
+                    Console.WriteLine($"Registration attempt failed: Email {registerModel.Email} already exists.");
+                    return BadRequest(new { message = "This email is already registered." });
+                }
 
+                var existingPhone = _userManager.Users.FirstOrDefault(u => u.PhoneNumber == registerModel.PhoneNumber);
+                if (existingPhone != null)
+                {
+                    Console.WriteLine($"Registration attempt failed: Phone {registerModel.PhoneNumber} already exists.");
+                    return BadRequest(new { message = "This phone number is already registered." });
+                }
+
+                var existingDevice = _userManager.Users.FirstOrDefault(u => u.DeviceId == registerModel.DeviceId);
+                if (existingDevice != null)
+                {
+                    Console.WriteLine($"Registration attempt failed: DeviceId {registerModel.DeviceId} already used.");
+                    return BadRequest(new { message = "Registration from this device is already used." });
+                }
+
+                var user = new ApplicationUser
+                {
+                    UserName = registerModel.Email,
+                    Email = registerModel.Email,
+                    Name = registerModel.Name,
+                    Location = registerModel.Location,
+                    NumberOfTasksCompleted = 0,
+                    NumberOfTasksEmployed = 0,
+                    LastTaskDoneDate = registerModel.LastTaskDoneDate,
+                    LastTaskEmployedDate = registerModel.LastTaskEmployedDate,
+                    DateJoined = registerModel.DateJoined,
+                    PhoneNumber = registerModel.PhoneNumber,
+                    IsAdmin = false,
+                    TrialEndDate = DateTime.UtcNow.AddDays(30),
+                    DeviceId = registerModel.DeviceId
+                };
+
+                var result = await _userManager.CreateAsync(user, registerModel.Password);
+
+                if (!result.Succeeded)
+                {
+                    Console.WriteLine("UserManager.CreateAsync failed: " + string.Join("; ", result.Errors.Select(e => e.Description)));
+                    return BadRequest(result.Errors);
+                }
+
+                if (registerModel.ProfilePhoto != null)
+                {
+                    using var memoryStream = new MemoryStream();
+                    await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
+                    user.ProfilePhoto = memoryStream.ToArray();
+                    await _userManager.UpdateAsync(user);
+                }
+
+                var role = registerModel.IsAdmin ? "Admin" : "Customer";
+                await _userManager.AddToRoleAsync(user, role);
+
+                if (!user.IsApproved)
+                {
+                    await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
+                        $"Dear {user.Name},<br><br>Your registration is successful,<br><strong>Email:</strong> {user.Email}<br>Please wait for approval to get full access. Thank you.");
+
+                    Console.WriteLine($"User {user.Email} registered successfully, pending approval.");
+                    return Ok(new { message = "User registered successfully, pending approval" });
+                }
+
+                if (user.IsApproved)
+                {
+                    var userId = await _userManager.GetUserIdAsync(user);
+                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+
+                    await _emailSender.SendEmailAsync(user.Email, "Welcome to the app",
+                        $"Dear {user.Name},<br><br>Welcome to Quick Cash Job app! You have been approved as a user.");
+
+                    if (_userManager.Options.SignIn.RequireConfirmedAccount)
+                    {
+                        Console.WriteLine($"User {user.Email} registered successfully. Requires email confirmation.");
+                        return Ok(new { message = "User registered successfully. Please confirm your email." });
+                    }
+
+                    await _signInManager.SignInAsync(user, isPersistent: false);
+                    Console.WriteLine($"User {user.Email} registered and signed in successfully.");
+                    return Ok(new { message = "User registered and signed in successfully" });
+                }
+
+                Console.WriteLine($"User {user.Email} registered successfully without requiring approval.");
+                return Ok(new { message = "User registered successfully" });
             }
-
-            return Ok(new { message = "User registered successfully" });
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during registration: {ex.Message} - {ex.StackTrace}");
+                return StatusCode(500, new { message = "An unexpected error occurred during registration." });
+            }
         }
 
 
