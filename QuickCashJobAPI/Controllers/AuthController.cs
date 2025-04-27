@@ -80,11 +80,13 @@ namespace QuickCashJobAPI.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    Console.WriteLine("ModelState is invalid: " + string.Join("; ", ModelState.Values
+                    var errorMessages = string.Join("; ", ModelState.Values
                         .SelectMany(x => x.Errors)
-                        .Select(x => x.ErrorMessage)));
-                    return BadRequest(ModelState);
+                        .Select(x => x.ErrorMessage));
+                    Console.WriteLine("ModelState is invalid: " + errorMessages);
+                    return BadRequest(new { message = errorMessages });
                 }
+
 
                 var existingUser = await _userManager.FindByEmailAsync(registerModel.Email);
                 if (existingUser != null)
@@ -132,13 +134,23 @@ namespace QuickCashJobAPI.Controllers
                     return BadRequest(result.Errors);
                 }
 
+
                 if (registerModel.ProfilePhoto != null)
                 {
-                    using var memoryStream = new MemoryStream();
-                    await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
-                    user.ProfilePhoto = memoryStream.ToArray();
-                    await _userManager.UpdateAsync(user);
+                    try
+                    {
+                        using var memoryStream = new MemoryStream();
+                        await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
+                        user.ProfilePhoto = memoryStream.ToArray();
+                        await _userManager.UpdateAsync(user);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Profile photo upload failed: {ex.Message}");
+                        return BadRequest(new { message = "Profile photo upload failed" });
+                    }
                 }
+
 
                 var role = registerModel.IsAdmin ? "Admin" : "Customer";
                 await _userManager.AddToRoleAsync(user, role);
