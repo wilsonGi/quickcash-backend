@@ -190,7 +190,8 @@ namespace QuickCashJobAPI.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"Critical error in ApproveUser: {ex.Message} - {ex.StackTrace}");
-                return StatusCode(500, new { message = "An unexpected error occurred during user approval." });
+                return StatusCode(500, new { message = $"Unexpected error: {ex.Message}", stackTrace = ex.StackTrace });
+
             }
         }
 
