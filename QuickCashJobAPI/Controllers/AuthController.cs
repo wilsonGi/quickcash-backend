@@ -134,6 +134,19 @@ namespace QuickCashJobAPI.Controllers
                     return BadRequest(result.Errors);
                 }
 
+                //New code not yet deployed 
+                if (registerModel.ProfilePhoto.Length > 5 * 1024 * 1024) // 5 MB max
+                {
+                    return BadRequest(new { message = "File size too large. Max allowed size is 5MB" });
+                }
+
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+                var fileExtension = Path.GetExtension(registerModel.ProfilePhoto.FileName);
+                if (!allowedExtensions.Contains(fileExtension.ToLower()))
+                {
+                    return BadRequest(new { message = "Invalid file type. Only JPG, JPEG, and PNG are allowed." });
+                }
+                //ends here
 
                 if (registerModel.ProfilePhoto != null)
                 {
@@ -214,10 +227,10 @@ namespace QuickCashJobAPI.Controllers
                     Location = registerModel.Location,
                     NumberOfTasksCompleted = 0,
                     NumberOfTasksEmployed = 0,
-                    LastTaskDoneDate = registerModel.LastTaskDoneDate,
-                    LastTaskEmployedDate = registerModel.LastTaskEmployedDate,
+                    LastTaskDoneDate = DateTime.SpecifyKind(registerModel.LastTaskDoneDate, DateTimeKind.Utc),
+                    LastTaskEmployedDate = DateTime.SpecifyKind(registerModel.LastTaskEmployedDate, DateTimeKind.Utc),
                     UserRating = 0,
-                    DateJoined = registerModel.DateJoined,
+                    DateJoined = DateTime.SpecifyKind(registerModel.DateJoined, DateTimeKind.Utc),
                     PhoneNumber = registerModel.PhoneNumber,
                     IsAdmin = true,
                     IsApproved = true,

@@ -139,7 +139,6 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-
         [HttpPost("ApproveUser/{userId}")]
         public async Task<IActionResult> ApproveUser(string userId)
         {
@@ -154,13 +153,10 @@ namespace QuickCashJobAPI.Controllers
 
                 user.IsApproved = true;
                 user.IsSubscriptionActive = true;
-                var result = await _userManager.UpdateAsync(user);
 
-                if (!result.Succeeded)
-                {
-                    Console.WriteLine($"ApproveUser failed: UpdateAsync errors - {string.Join("; ", result.Errors.Select(e => e.Description))}");
-                    return BadRequest(new { message = "Failed to approve user.", errors = result.Errors });
-                }
+                // Now directly tell the database to track the change
+                _context.Users.Update(user);
+                await _context.SaveChangesAsync(); // Save to database
 
                 try
                 {
@@ -191,7 +187,6 @@ namespace QuickCashJobAPI.Controllers
             {
                 Console.WriteLine($"Critical error in ApproveUser: {ex.Message} - {ex.StackTrace}");
                 return StatusCode(500, new { message = $"Unexpected error: {ex.Message}", stackTrace = ex.StackTrace });
-
             }
         }
 
@@ -209,14 +204,10 @@ namespace QuickCashJobAPI.Controllers
             user.IsApproved = false;
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
-            var result = await _userManager.UpdateAsync(user);
 
-            if (!result.Succeeded)
-            {
-                return BadRequest("Failed to disapprove user.");
-            }
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
 
-            // ✅ Send disapproval email
             await _emailSender.SendEmailAsync(user.Email, "Your account has been disapproved",
                 $"Dear {user.UserName},<br><br>We regret to inform you that your account approval request has been declined.<br>" +
                 $"If you believe this is an error or need further clarification, please contact our support team.<br><br>" +
@@ -236,14 +227,11 @@ namespace QuickCashJobAPI.Controllers
             user.IsBlocked = true;
             user.IsSubscriptionActive = false;
             user.LockoutEnd = DateTimeOffset.MaxValue;
-            var result = await _userManager.UpdateAsync(user);
 
-            if (result.Succeeded)
-            {
-                return Ok("User blocked successfully.");
-            }
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
 
-            return BadRequest("Failed to block user.");
+            return Ok("User blocked successfully.");
         }
 
 
@@ -255,14 +243,11 @@ namespace QuickCashJobAPI.Controllers
 
             user.IsBlocked = false;
             user.LockoutEnd = null;
-            var result = await _userManager.UpdateAsync(user);
 
-            if (result.Succeeded)
-            {
-                return Ok("User unblocked successfully.");
-            }
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
 
-            return BadRequest("Failed to unblock user.");
+            return Ok("User unblocked successfully.");
         }
 
 
@@ -272,20 +257,18 @@ namespace QuickCashJobAPI.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound("User not found.");
 
-            var result = await _userManager.DeleteAsync(user);
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
 
-            if (result.Succeeded)
-            {
-                return Ok("User deleted successfully.");
-            }
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
 
-            return BadRequest("Failed to delete user.");
+            return Ok("User soft-deleted successfully.");
         }
 
 
-       
+
+
         //Mamual Subscriptiom Remewal With Buttom Click
         [HttpPost("renew-subscription/{userId}")]
         public async Task<IActionResult> RenewSubscription(string userId) // Change int to string
