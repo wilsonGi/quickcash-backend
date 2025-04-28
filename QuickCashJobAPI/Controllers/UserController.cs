@@ -139,6 +139,7 @@ namespace QuickCashJobAPI.Controllers
 
 
 
+
         [HttpPost("ApproveUser/{userId}")]
         public async Task<IActionResult> ApproveUser(string userId)
         {
@@ -153,10 +154,13 @@ namespace QuickCashJobAPI.Controllers
 
                 user.IsApproved = true;
                 user.IsSubscriptionActive = true;
+                var result = await _userManager.UpdateAsync(user);
 
-                // Now directly tell the database to track the change
-                _context.Users.Update(user);
-                await _context.SaveChangesAsync(); // Save to database
+                if (!result.Succeeded)
+                {
+                    Console.WriteLine($"ApproveUser failed: UpdateAsync errors - {string.Join("; ", result.Errors.Select(e => e.Description))}");
+                    return BadRequest(new { message = "Failed to approve user.", errors = result.Errors });
+                }
 
                 try
                 {
@@ -187,6 +191,7 @@ namespace QuickCashJobAPI.Controllers
             {
                 Console.WriteLine($"Critical error in ApproveUser: {ex.Message} - {ex.StackTrace}");
                 return StatusCode(500, new { message = $"Unexpected error: {ex.Message}", stackTrace = ex.StackTrace });
+
             }
         }
 
@@ -204,10 +209,14 @@ namespace QuickCashJobAPI.Controllers
             user.IsApproved = false;
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
+            var result = await _userManager.UpdateAsync(user);
 
-            _context.Users.Update(user);
-            await _context.SaveChangesAsync();
+            if (!result.Succeeded)
+            {
+                return BadRequest("Failed to disapprove user.");
+            }
 
+            // ✅ Send disapproval email
             await _emailSender.SendEmailAsync(user.Email, "Your account has been disapproved",
                 $"Dear {user.UserName},<br><br>We regret to inform you that your account approval request has been declined.<br>" +
                 $"If you believe this is an error or need further clarification, please contact our support team.<br><br>" +
@@ -227,11 +236,14 @@ namespace QuickCashJobAPI.Controllers
             user.IsBlocked = true;
             user.IsSubscriptionActive = false;
             user.LockoutEnd = DateTimeOffset.MaxValue;
+            var result = await _userManager.UpdateAsync(user);
 
-            _context.Users.Update(user);
-            await _context.SaveChangesAsync();
+            if (result.Succeeded)
+            {
+                return Ok("User blocked successfully.");
+            }
 
-            return Ok("User blocked successfully.");
+            return BadRequest("Failed to block user.");
         }
 
 
@@ -243,13 +255,15 @@ namespace QuickCashJobAPI.Controllers
 
             user.IsBlocked = false;
             user.LockoutEnd = null;
+            var result = await _userManager.UpdateAsync(user);
 
-            _context.Users.Update(user);
-            await _context.SaveChangesAsync();
+            if (result.Succeeded)
+            {
+                return Ok("User unblocked successfully.");
+            }
 
-            return Ok("User unblocked successfully.");
+            return BadRequest("Failed to unblock user.");
         }
-
 
         [HttpDelete("DeleteUser/{userId}")]
         public async Task<IActionResult> DeleteUser(string userId)
@@ -265,7 +279,6 @@ namespace QuickCashJobAPI.Controllers
 
             return Ok("User soft-deleted successfully.");
         }
-
 
 
 
