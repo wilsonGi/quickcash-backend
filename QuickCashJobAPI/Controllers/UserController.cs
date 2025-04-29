@@ -174,6 +174,7 @@ namespace QuickCashJobAPI.Controllers
                 user.DateJoined = user.DateJoined == default
                     ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
                     : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+                user.TrialEndDate = DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
 
 
                 // Set default values for Name and Location if they're null or empty
@@ -255,6 +256,7 @@ namespace QuickCashJobAPI.Controllers
             user.DateJoined = user.DateJoined == default
                 ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
                 : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+            user.TrialEndDate = DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
 
 
             user.IsApproved = false;
@@ -296,6 +298,7 @@ namespace QuickCashJobAPI.Controllers
             user.DateJoined = user.DateJoined == default
                 ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
                 : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+            user.TrialEndDate = DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
 
 
             user.IsBlocked = true;
@@ -331,6 +334,7 @@ namespace QuickCashJobAPI.Controllers
             user.DateJoined = user.DateJoined == default
                 ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
                 : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+            user.TrialEndDate = DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
 
 
             user.IsBlocked = false;
@@ -365,6 +369,7 @@ namespace QuickCashJobAPI.Controllers
             user.DateJoined = user.DateJoined == default
                 ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
                 : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+            user.TrialEndDate = DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
 
 
             user.IsDeleted = true;
