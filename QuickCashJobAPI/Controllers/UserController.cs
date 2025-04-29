@@ -139,7 +139,6 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-
         [HttpPost("ApproveUser/{userId}")]
         public async Task<IActionResult> ApproveUser(string userId)
         {
@@ -152,8 +151,33 @@ namespace QuickCashJobAPI.Controllers
                     return NotFound("User not found.");
                 }
 
+                // Check if the user is already approved
+                if (user.IsApproved)
+                {
+                    Console.WriteLine($"User {user.Email} is already approved.");
+                    return BadRequest("User is already approved.");
+                }
+
+                // Set default values for critical fields if they're null or default
                 user.IsApproved = true;
                 user.IsSubscriptionActive = true;
+
+                // Ensure that LastTaskDoneDate, LastTaskEmployedDate, DateJoined are populated if they're still default
+                user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
+                user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
+                user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+
+                // Set default values for Name and Location if they're null or empty
+                if (string.IsNullOrEmpty(user.Name))
+                {
+                    user.Name = "User"; // Or some fallback value
+                }
+
+                if (string.IsNullOrEmpty(user.Location))
+                {
+                    user.Location = "Unknown"; // Or some fallback value
+                }
+
                 var result = await _userManager.UpdateAsync(user);
 
                 if (!result.Succeeded)
@@ -168,7 +192,13 @@ namespace QuickCashJobAPI.Controllers
                     var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
                     code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
-                    var callbackUrl = $"{Request.Scheme}://{Request.Host}/api/Account/ConfirmEmail?userId={user.Id}&code={code}";
+                    var callbackUrl = QueryHelpers.AddQueryString(
+                        $"{Request.Scheme}://{Request.Host}/api/Account/ConfirmEmail",
+                        new Dictionary<string, string?>
+                        {
+                    { "userId", user.Id },
+                    { "code", code }
+                        });
 
                     // Send approval email
                     await _emailSender.SendEmailAsync(user.Email, "You have been approved!",
@@ -191,10 +221,8 @@ namespace QuickCashJobAPI.Controllers
             {
                 Console.WriteLine($"Critical error in ApproveUser: {ex.Message} - {ex.StackTrace}");
                 return StatusCode(500, new { message = $"Unexpected error: {ex.Message}", stackTrace = ex.StackTrace });
-
             }
         }
-
 
 
         [HttpPost("DisapproveUser/{userId}")]
@@ -206,9 +234,15 @@ namespace QuickCashJobAPI.Controllers
                 return NotFound("User not found.");
             }
 
+            // Ensure all necessary date fields are populated
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
+            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+
             user.IsApproved = false;
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
+
             var result = await _userManager.UpdateAsync(user);
 
             if (!result.Succeeded)
@@ -216,7 +250,7 @@ namespace QuickCashJobAPI.Controllers
                 return BadRequest("Failed to disapprove user.");
             }
 
-            // ✅ Send disapproval email
+            // Send disapproval email
             await _emailSender.SendEmailAsync(user.Email, "Your account has been disapproved",
                 $"Dear {user.UserName},<br><br>We regret to inform you that your account approval request has been declined.<br>" +
                 $"If you believe this is an error or need further clarification, please contact our support team.<br><br>" +
@@ -226,16 +260,21 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-
         [HttpPost("BlockUser/{userId}")]
         public async Task<IActionResult> BlockUser(string userId)
         {
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound("User not found.");
 
+            // Ensure critical date fields are populated
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
+            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+
             user.IsBlocked = true;
             user.IsSubscriptionActive = false;
             user.LockoutEnd = DateTimeOffset.MaxValue;
+
             var result = await _userManager.UpdateAsync(user);
 
             if (result.Succeeded)
@@ -253,8 +292,14 @@ namespace QuickCashJobAPI.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound("User not found.");
 
+            // Ensure critical date fields are populated
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
+            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+
             user.IsBlocked = false;
             user.LockoutEnd = null;
+
             var result = await _userManager.UpdateAsync(user);
 
             if (result.Succeeded)
@@ -265,11 +310,17 @@ namespace QuickCashJobAPI.Controllers
             return BadRequest("Failed to unblock user.");
         }
 
+
         [HttpDelete("DeleteUser/{userId}")]
         public async Task<IActionResult> DeleteUser(string userId)
         {
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound("User not found.");
+
+            // Ensure critical date fields are populated
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
+            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
 
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
