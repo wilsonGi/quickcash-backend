@@ -163,9 +163,18 @@ namespace QuickCashJobAPI.Controllers
                 user.IsSubscriptionActive = true;
 
                 // Ensure that LastTaskDoneDate, LastTaskEmployedDate, DateJoined are populated if they're still default
-                user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
-                user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
-                user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+                user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                    ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                    : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+                user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                    ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                    : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+                user.DateJoined = user.DateJoined == default
+                    ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                    : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
 
                 // Set default values for Name and Location if they're null or empty
                 if (string.IsNullOrEmpty(user.Name))
@@ -235,9 +244,18 @@ namespace QuickCashJobAPI.Controllers
             }
 
             // Ensure all necessary date fields are populated
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
-            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+            user.DateJoined = user.DateJoined == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
 
             user.IsApproved = false;
             user.IsDeleted = true;
@@ -267,9 +285,18 @@ namespace QuickCashJobAPI.Controllers
             if (user == null) return NotFound("User not found.");
 
             // Ensure critical date fields are populated
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
-            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+            user.DateJoined = user.DateJoined == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
 
             user.IsBlocked = true;
             user.IsSubscriptionActive = false;
@@ -293,9 +320,18 @@ namespace QuickCashJobAPI.Controllers
             if (user == null) return NotFound("User not found.");
 
             // Ensure critical date fields are populated
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
-            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                 ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                 : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+            user.DateJoined = user.DateJoined == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
 
             user.IsBlocked = false;
             user.LockoutEnd = null;
@@ -318,9 +354,18 @@ namespace QuickCashJobAPI.Controllers
             if (user == null) return NotFound("User not found.");
 
             // Ensure critical date fields are populated
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
-            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                 ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                 : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+            user.DateJoined = user.DateJoined == default
+                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
 
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
