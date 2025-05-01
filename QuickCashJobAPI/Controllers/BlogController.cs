@@ -61,32 +61,16 @@ namespace QuickCashJobAPI.Controllers
 
      
         [HttpPost]
-        public async Task<IActionResult> CreateBlog([FromForm] Blog blog, IFormFile? imageFile)
+        public async Task<IActionResult> CreateBlog([FromBody] Blog blog)
         {
             if (string.IsNullOrWhiteSpace(blog.Title) || string.IsNullOrWhiteSpace(blog.Content))
             {
                 return BadRequest(new { message = "Title and Content are required." });
             }
 
-            blog.CreatedAt = DateTime.UtcNow; // ✅ Ensure CreatedAt is always set
+            blog.CreatedAt = DateTime.UtcNow;
 
-            if (imageFile != null)
-            {
-                var uploadsFolder = Path.Combine("wwwroot", "uploads");
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                }
-
-                var filePath = Path.Combine(uploadsFolder, imageFile.FileName);
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await imageFile.CopyToAsync(stream);
-                }
-
-                blog.ImageUrl = "/uploads/" + imageFile.FileName; // ✅ Only set if an image is provided
-            }
-
+            // ✅ blog.ImageUrl is already set from Flutter (Firebase URL)
             _db.blogs.Add(blog);
             await _db.SaveChangesAsync();
 

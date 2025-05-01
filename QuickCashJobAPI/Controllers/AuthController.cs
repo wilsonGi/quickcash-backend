@@ -83,32 +83,32 @@ namespace QuickCashJobAPI.Controllers
                     var errorMessages = string.Join("; ", ModelState.Values
                         .SelectMany(x => x.Errors)
                         .Select(x => x.ErrorMessage));
-                    Console.WriteLine("ModelState is invalid: " + errorMessages);
                     return BadRequest(new { message = errorMessages });
                 }
 
-
-                var existingUser = await _userManager.FindByEmailAsync(registerModel.Email);
-                if (existingUser != null)
-                {
-                    Console.WriteLine($"Registration attempt failed: Email {registerModel.Email} already exists.");
+                // Check for duplicate email, phone, and device
+                if (await _userManager.FindByEmailAsync(registerModel.Email) != null)
                     return BadRequest(new { message = "This email is already registered." });
-                }
 
-                var existingPhone = _userManager.Users.FirstOrDefault(u => u.PhoneNumber == registerModel.PhoneNumber);
-                if (existingPhone != null)
-                {
-                    Console.WriteLine($"Registration attempt failed: Phone {registerModel.PhoneNumber} already exists.");
+                if (_userManager.Users.Any(u => u.PhoneNumber == registerModel.PhoneNumber))
                     return BadRequest(new { message = "This phone number is already registered." });
-                }
 
-                var existingDevice = _userManager.Users.FirstOrDefault(u => u.DeviceId == registerModel.DeviceId);
-                if (existingDevice != null)
-                {
-                    Console.WriteLine($"Registration attempt failed: DeviceId {registerModel.DeviceId} already used.");
+                if (_userManager.Users.Any(u => u.DeviceId == registerModel.DeviceId))
                     return BadRequest(new { message = "Registration from this device is already used." });
+
+                // Validate profile photo if provided
+                if (registerModel.ProfilePhoto != null)
+                {
+                    if (registerModel.ProfilePhoto.Length > 5 * 1024 * 1024)
+                        return BadRequest(new { message = "File size too large. Max allowed size is 5MB" });
+
+                    var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+                    var fileExtension = Path.GetExtension(registerModel.ProfilePhoto.FileName);
+                    if (!allowedExtensions.Contains(fileExtension.ToLower()))
+                        return BadRequest(new { message = "Invalid file type. Only JPG, JPEG, and PNG are allowed." });
                 }
 
+                // Create user
                 var user = new ApplicationUser
                 {
                     UserName = registerModel.Email,
@@ -127,59 +127,32 @@ namespace QuickCashJobAPI.Controllers
                 };
 
                 var result = await _userManager.CreateAsync(user, registerModel.Password);
-
                 if (!result.Succeeded)
-                {
-                    Console.WriteLine("UserManager.CreateAsync failed: " + string.Join("; ", result.Errors.Select(e => e.Description)));
                     return BadRequest(result.Errors);
-                }
 
-                //New code not yet deployed 
-                if (registerModel.ProfilePhoto.Length > 5 * 1024 * 1024) // 5 MB max
-                {
-                    return BadRequest(new { message = "File size too large. Max allowed size is 5MB" });
-                }
-
-                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
-                var fileExtension = Path.GetExtension(registerModel.ProfilePhoto.FileName);
-                if (!allowedExtensions.Contains(fileExtension.ToLower()))
-                {
-                    return BadRequest(new { message = "Invalid file type. Only JPG, JPEG, and PNG are allowed." });
-                }
-                //ends here
-
+                // Process profile photo
                 if (registerModel.ProfilePhoto != null)
                 {
-                    try
-                    {
-                        using var memoryStream = new MemoryStream();
-                        await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
-                        user.ProfilePhoto = memoryStream.ToArray();
-                        await _userManager.UpdateAsync(user);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Profile photo upload failed: {ex.Message}");
-                        return BadRequest(new { message = "Profile photo upload failed" });
-                    }
+                    using var memoryStream = new MemoryStream();
+                    await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
+                    user.ProfilePhoto = memoryStream.ToArray();
+                    await _userManager.UpdateAsync(user);
                 }
 
-
+                // Assign role
                 var role = registerModel.IsAdmin ? "Admin" : "Customer";
                 await _userManager.AddToRoleAsync(user, role);
 
+                // Send email and return status
                 if (!user.IsApproved)
                 {
                     await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
                         $"Dear {user.Name},<br><br>Your registration is successful,<br><strong>Email:</strong> {user.Email}<br>Please wait for approval to get full access. Thank you.");
-
-                    Console.WriteLine($"User {user.Email} registered successfully, pending approval.");
                     return Ok(new { message = "User registered successfully, pending approval" });
                 }
 
                 if (user.IsApproved)
                 {
-                    var userId = await _userManager.GetUserIdAsync(user);
                     var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
                     code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
@@ -187,26 +160,21 @@ namespace QuickCashJobAPI.Controllers
                         $"Dear {user.Name},<br><br>Welcome to Quick Cash Job app! You have been approved as a user.");
 
                     if (_userManager.Options.SignIn.RequireConfirmedAccount)
-                    {
-                        Console.WriteLine($"User {user.Email} registered successfully. Requires email confirmation.");
                         return Ok(new { message = "User registered successfully. Please confirm your email." });
-                    }
 
                     await _signInManager.SignInAsync(user, isPersistent: false);
-                    Console.WriteLine($"User {user.Email} registered and signed in successfully.");
                     return Ok(new { message = "User registered and signed in successfully" });
                 }
 
-                Console.WriteLine($"User {user.Email} registered successfully without requiring approval.");
                 return Ok(new { message = "User registered successfully" });
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error during registration: {ex.Message} - {ex.StackTrace}");
+                Console.WriteLine($"Error during registration: {ex.Message}");
                 return StatusCode(500, new { message = ex.Message });
             }
-
         }
+
 
 
         [HttpPost("register-admin")]
