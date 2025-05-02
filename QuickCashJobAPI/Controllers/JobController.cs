@@ -157,11 +157,13 @@ namespace QuickCashJobAPI.Controllers
             }
 
             var jobs = _db.Jobs
+                .Include(job => job.Category)
                 .Where(job => job.UserId == currentUser.Id) // Include only jobs created by the current user
                 .Select(job => new JobDTO
                 {
                     Id = job.Id,
                     CategoryId = job.CategoryId,
+                    CategoryName = job.Category.CategoryName,
                     Description = job.Description,
                     Location = job.Location,
                     Status = job.Status,
