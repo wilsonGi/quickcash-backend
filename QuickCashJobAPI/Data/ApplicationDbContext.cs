@@ -247,6 +247,17 @@ namespace QuickCashJobAPI.Data
                 .HasOne(us => us.Skill)
                 .WithMany(s => s.UserSkills)
                 .HasForeignKey(us => us.SkillId);
+
+            // Force UTC for all DateTime properties in Blog
+            modelBuilder.Entity<Blog>().Property(b => b.CreatedAt)
+                .HasConversion(
+                    v => v,
+                    v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+            modelBuilder.Entity<Blog>().Property(b => b.UpdatedAt)
+                .HasConversion(
+                    v => v,
+                    v => v == null ? null : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc));
         }
     }
 }
