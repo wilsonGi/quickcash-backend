@@ -55,6 +55,7 @@ namespace QuickCashJobAPI.Controllers
                 LastTaskEmployedDate = user.LastTaskEmployedDate,
                 DateJoined = user.DateJoined,
                 IsSubscriptionActive = user.IsSubscriptionActive, // Include in response
+                IsApproved = user.IsApproved,
                 TrialEndDate = user.TrialEndDate,
                 ProfilePhoto = user.ProfilePhoto != null ? Convert.ToBase64String(user.ProfilePhoto) : null,
                 ChatCount = chatCount // 👈 Include it here
