@@ -312,7 +312,16 @@ namespace QuickCashJobAPI.Controllers
                 return Ok("User blocked successfully.");
             }
 
-            return BadRequest("Failed to block user.");
+            if (!result.Succeeded)
+            {
+                return BadRequest("Failed to block user.");
+            }
+
+            await _emailSender.SendEmailAsync(user.Email, "Your account has been blocked",
+                $"Dear {user.UserName},<br><br>Your account has been blocked by the administrator due to policy violations or suspicious activities.<br>" +
+                $"Please contact support for more details.<br><br>Thank you.");
+
+            return Ok("User has been successfully blocked and notified via email.");
         }
 
 
@@ -347,7 +356,16 @@ namespace QuickCashJobAPI.Controllers
                 return Ok("User unblocked successfully.");
             }
 
-            return BadRequest("Failed to unblock user.");
+            if (!result.Succeeded)
+            {
+                return BadRequest("Failed to unblock user.");
+            }
+
+            await _emailSender.SendEmailAsync(user.Email, "Your account has been unblocked",
+                $"Dear {user.UserName},<br><br>Your account has been unblocked by the administrator so your access to activities have been restored.<br>" +
+                $"Please enjoy your usage.<br><br>Thank you.");
+
+            return Ok("User has been successfully unblocked and notified via email.");
         }
 
 
