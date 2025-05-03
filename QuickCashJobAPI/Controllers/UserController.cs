@@ -65,6 +65,7 @@ namespace QuickCashJobAPI.Controllers
                     user.PhoneNumber,
                     user.IsBlocked,
                     user.IsApproved,
+                    user.IsAdmin,
                     user.TrialEndDate,
                     user.IsSubscriptionActive,
                     ProfilePhoto = user.ProfilePhoto != null ? Convert.ToBase64String(user.ProfilePhoto) : null,
@@ -98,6 +99,7 @@ namespace QuickCashJobAPI.Controllers
                 user.PhoneNumber,
                 user.IsBlocked,
                 user.IsApproved,
+                user.IsAdmin,
                 user.TrialEndDate,
                 user.IsSubscriptionActive,
             }).ToList();
