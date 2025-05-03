@@ -61,21 +61,26 @@ namespace QuickCashJobAPI.Controllers
 
      
         [HttpPost]
+        [HttpPost]
         public async Task<IActionResult> CreateBlog([FromBody] Blog blog)
         {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState); // <-- Return detailed error
+            }
+
             if (string.IsNullOrWhiteSpace(blog.Title) || string.IsNullOrWhiteSpace(blog.Content))
             {
                 return BadRequest(new { message = "Title and Content are required." });
             }
 
             blog.CreatedAt = DateTime.UtcNow;
-
-            // ✅ blog.ImageUrl is already set from Flutter (Firebase URL)
             _db.blogs.Add(blog);
             await _db.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetBlog), new { id = blog.Id }, blog);
         }
+
 
 
         [HttpPut("{id}")]
