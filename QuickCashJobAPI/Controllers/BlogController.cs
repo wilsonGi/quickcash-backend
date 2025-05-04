@@ -59,22 +59,16 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-     
-        [HttpPost]
+        // POST: api/Blog
         [HttpPost]
         public async Task<IActionResult> CreateBlog([FromBody] Blog blog)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState); // <-- Return detailed error
-            }
-
             if (string.IsNullOrWhiteSpace(blog.Title) || string.IsNullOrWhiteSpace(blog.Content))
-            {
                 return BadRequest(new { message = "Title and Content are required." });
-            }
 
             blog.CreatedAt = DateTime.UtcNow;
+            blog.UpdatedAt = null;
+
             _db.blogs.Add(blog);
             await _db.SaveChangesAsync();
 
@@ -82,31 +76,23 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-
+        // PUT: api/Blog/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateBlog(int id, [FromForm] Blog blog, IFormFile imageFile)
+        public async Task<IActionResult> UpdateBlog(int id, [FromBody] Blog updatedBlog)
         {
             var existingBlog = await _db.blogs.FindAsync(id);
             if (existingBlog == null) return NotFound();
 
-            existingBlog.Title = blog.Title;
-            existingBlog.Content = blog.Content;
+            existingBlog.Title = updatedBlog.Title;
+            existingBlog.Content = updatedBlog.Content;
+            existingBlog.ImageUrl = updatedBlog.ImageUrl; // Firebase image URL
             existingBlog.UpdatedAt = DateTime.UtcNow;
 
-            if (imageFile != null)
-            {
-                var filePath = Path.Combine("wwwroot/uploads", imageFile.FileName);
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await imageFile.CopyToAsync(stream);
-                }
-                existingBlog.ImageUrl = "/uploads/" + imageFile.FileName;
-            }
-
-            _db.blogs.Update(existingBlog);
             await _db.SaveChangesAsync();
+
             return NoContent();
         }
+
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteBlog(int id)
