@@ -20,15 +20,13 @@ namespace QuickCashJobAPI.Controllers
         [HttpGet]
         public async Task<IActionResult> GetBlogs()
         {
-            var baseUrl = $"{Request.Scheme}://{Request.Host}"; // Get API base URL dynamically
-
             var blogs = await _db.blogs
                 .Select(b => new
                 {
                     b.Id,
                     b.Title,
                     b.Content,
-                    ImageUrl = b.ImageUrl != null ? $"{baseUrl}{b.ImageUrl}" : null,
+                    ImageBase64 = b.ImageUrl != null ? Convert.ToBase64String(b.ImageUrl) : null,
                     b.CreatedAt,
                     b.UpdatedAt
                 })
@@ -37,20 +35,18 @@ namespace QuickCashJobAPI.Controllers
             return Ok(blogs);
         }
 
-
         [HttpGet("{id}")]
         public async Task<IActionResult> GetBlog(int id)
         {
             var blog = await _db.blogs.FindAsync(id);
             if (blog == null) return NotFound();
 
-            var baseUrl = $"{Request.Scheme}://{Request.Host}"; // Ensure full URL
             var response = new
             {
                 blog.Id,
                 blog.Title,
                 blog.Content,
-                ImageUrl = blog.ImageUrl != null ? $"{baseUrl}{blog.ImageUrl}" : null,
+                ImageBase64 = blog.ImageUrl != null ? Convert.ToBase64String(blog.ImageUrl) : null,
                 blog.CreatedAt,
                 blog.UpdatedAt
             };
@@ -58,16 +54,26 @@ namespace QuickCashJobAPI.Controllers
             return Ok(response);
         }
 
-
-        // POST: api/Blog
         [HttpPost]
-        public async Task<IActionResult> CreateBlog([FromBody] Blog blog)
+        public async Task<IActionResult> CreateBlog([FromForm] string title, [FromForm] string content, [FromForm] IFormFile? imageFile)
         {
-            if (string.IsNullOrWhiteSpace(blog.Title) || string.IsNullOrWhiteSpace(blog.Content))
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(content))
                 return BadRequest(new { message = "Title and Content are required." });
 
-            blog.CreatedAt = DateTime.UtcNow;
-            blog.UpdatedAt = null;
+            var blog = new Blog
+            {
+                Title = title,
+                Content = content,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = null
+            };
+
+            if (imageFile != null)
+            {
+                using var memoryStream = new MemoryStream();
+                await imageFile.CopyToAsync(memoryStream);
+                blog.ImageUrl = memoryStream.ToArray();
+            }
 
             _db.blogs.Add(blog);
             await _db.SaveChangesAsync();

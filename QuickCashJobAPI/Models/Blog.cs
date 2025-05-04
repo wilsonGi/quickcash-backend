@@ -12,7 +12,7 @@ namespace QuickCashJobAPI.Models
         [Required]
         public string Content { get; set; }
 
-        public string? ImageUrl { get; set; } // URL of the uploaded image 
+        public byte[]? ImageUrl { get; set; } // URL of the uploaded image 
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
