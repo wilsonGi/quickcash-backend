@@ -23,7 +23,7 @@ namespace QuickCashJobAPI.Data
         public DbSet<Skill> Skills { get; set; }
         public DbSet<UserSkill> UserSkills { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
-
+        public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

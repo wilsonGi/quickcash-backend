@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -172,6 +173,33 @@ namespace QuickCashJobAPI.Controllers
             {
                 Console.WriteLine($"Error during registration: {ex.Message}");
                 return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("admin/deregister-device")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AdminDeregisterDevice([FromBody] string userEmailOrPhone)
+        {
+            try
+            {
+                var user = _userManager.Users
+                    .FirstOrDefault(u => u.Email == userEmailOrPhone || u.PhoneNumber == userEmailOrPhone);
+
+                if (user == null)
+                    return NotFound(new { message = "User not found." });
+
+                if (string.IsNullOrEmpty(user.DeviceId))
+                    return BadRequest(new { message = "No device is currently registered for this user." });
+
+                user.DeviceId = null;
+                await _userManager.UpdateAsync(user);
+
+                return Ok(new { message = $"Device for user {user.Email} deregistered successfully." });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during admin device deregistration: {ex.Message}");
+                return StatusCode(500, new { message = "Internal server error." });
             }
         }
 

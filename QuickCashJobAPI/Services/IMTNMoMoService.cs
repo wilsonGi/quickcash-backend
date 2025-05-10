@@ -5,5 +5,6 @@ namespace QuickCashJobAPI.Services
     public interface IMTNMoMoService
     {
         Task<bool> ProcessPayment(string phoneNumber, decimal amount, string userId);
+        Task<string> GetTransactionStatus(string referenceId);
     }
 }

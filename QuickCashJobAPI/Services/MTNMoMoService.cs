@@ -1,4 +1,8 @@
-﻿using System.Text.Json;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using QuickCashJobAPI.Data;
+using QuickCashJobAPI.Models;
+using System.Text.Json;
 
 namespace QuickCashJobAPI.Services
 {
@@ -10,12 +14,14 @@ namespace QuickCashJobAPI.Services
         private readonly string _subscriptionKey;
         private readonly string _baseUrl;
         private readonly IConfiguration _configuration;
+        private readonly ApplicationDbContext _dbContext;
 
 
-        public MTNMoMoService(HttpClient httpClient, IConfiguration configuration, ILogger<MTNMoMoService> logger)
+        public MTNMoMoService(HttpClient httpClient, IConfiguration configuration, ILogger<MTNMoMoService> logger, ApplicationDbContext dbContext)
         {
             _httpClient = httpClient;
             _logger = logger;
+            _dbContext = dbContext;
             _apiKey = configuration["MTNMoMo:ApiKey"];
             _subscriptionKey = configuration["MTNMoMo:SubscriptionKey"];
             _baseUrl = "https://sandbox.momodeveloper.mtn.com"; // Change to live in production
@@ -30,7 +36,7 @@ namespace QuickCashJobAPI.Services
 
                 var paymentRequest = new
                 {
-                    amount = amount.ToString("F2"), // Ensure amount is formatted properly
+                    amount = amount.ToString("F2"),
                     currency = "GHS",
                     externalId = referenceId,
                     payer = new { partyIdType = "MSISDN", partyId = phoneNumber },
@@ -38,29 +44,88 @@ namespace QuickCashJobAPI.Services
                     payeeNote = "QuickCash Subscription"
                 };
 
+                // Create and store the transaction
+                var transaction = new PaymentTransaction
+                {
+                    ReferenceId = referenceId,
+                    UserId = userId,
+                    Amount = amount,
+                    Status = "Pending",
+                    CreatedAt = DateTime.UtcNow
+                };
 
+                _dbContext.PaymentTransactions.Add(transaction);
+                await _dbContext.SaveChangesAsync();
+
+                // Set headers
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 _httpClient.DefaultRequestHeaders.Add("X-Reference-Id", referenceId);
                 _httpClient.DefaultRequestHeaders.Add("X-Target-Environment", "sandbox");
                 _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _subscriptionKey);
 
+                // Send payment request
                 var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/collection/v1_0/requesttopay", paymentRequest);
 
                 if (response.IsSuccessStatusCode)
                 {
-                    return true; // Payment request was successful
+                    return true;
                 }
 
                 _logger.LogError($"Payment failed: {await response.Content.ReadAsStringAsync()}");
-                return false; // Payment failed
+                return false;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Exception in ProcessPayment: {ex.Message}");
-                return false; // Handle failure properly
+                return false;
             }
         }
+
+
+
+        public async Task<string> GetTransactionStatus(string referenceId)
+        {
+            try
+            {
+                var token = await GetAccessToken();
+
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+                _httpClient.DefaultRequestHeaders.Add("X-Target-Environment", "sandbox");
+                _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _subscriptionKey);
+
+                var response = await _httpClient.GetAsync($"{_baseUrl}/collection/v1_0/requesttopay/{referenceId}");
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError($"Failed to get transaction status: {responseBody}");
+                    return null;
+                }
+
+                using var doc = JsonDocument.Parse(responseBody);
+                var status = doc.RootElement.GetProperty("status").GetString();
+
+                var transaction = await _dbContext.PaymentTransactions
+                    .FirstOrDefaultAsync(t => t.ReferenceId == referenceId);
+
+                if (transaction != null)
+                {
+                    transaction.Status = status;
+                    transaction.ResponsePayload = responseBody;
+                    await _dbContext.SaveChangesAsync();
+                }
+
+                return status;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error checking payment status: {ex.Message}");
+                return null;
+            }
+        }
+
 
         private async Task<string> GetAccessToken()
         {
