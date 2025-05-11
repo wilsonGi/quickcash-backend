@@ -176,14 +176,19 @@ namespace QuickCashJobAPI.Controllers
             }
         }
 
+        public class DeregisterRequest
+        {
+            public string UserEmailOrPhone { get; set; }
+        }
+
         [HttpPost("admin/deregister-device")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AdminDeregisterDevice([FromBody] string userEmailOrPhone)
+        public async Task<IActionResult> AdminDeregisterDevice([FromBody] DeregisterRequest request)
         {
             try
             {
                 var user = _userManager.Users
-                    .FirstOrDefault(u => u.Email == userEmailOrPhone || u.PhoneNumber == userEmailOrPhone);
+                    .FirstOrDefault(u => u.Email == request.UserEmailOrPhone || u.PhoneNumber == request.UserEmailOrPhone);
 
                 if (user == null)
                     return NotFound(new { message = "User not found." });
