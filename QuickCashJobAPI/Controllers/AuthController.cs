@@ -183,23 +183,40 @@ namespace QuickCashJobAPI.Controllers
 
         [HttpPost("admin/deregister-device")]
         [Authorize(Roles = "Admin")]
+        [HttpPost("admin/deregister-device")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> AdminDeregisterDevice([FromBody] DeregisterRequest request)
         {
             try
             {
+                Console.WriteLine($"Deregistering for: {request.UserEmailOrPhone}");
+
                 var user = _userManager.Users
                     .FirstOrDefault(u => u.Email == request.UserEmailOrPhone || u.PhoneNumber == request.UserEmailOrPhone);
 
                 if (user == null)
+                {
+                    Console.WriteLine("User not found.");
                     return NotFound(new { message = "User not found." });
+                }
 
                 if (string.IsNullOrEmpty(user.DeviceId))
+                {
+                    Console.WriteLine("No device registered.");
                     return BadRequest(new { message = "No device is currently registered for this user." });
+                }
 
                 user.DeviceId = null;
-                await _userManager.UpdateAsync(user);
+                var result = await _userManager.UpdateAsync(user);
 
-                return Ok(new { message = $"Device for user {user.Email} deregistered successfully." });
+                if (result.Succeeded)
+                {
+                    Console.WriteLine("Device deregistered.");
+                    return Ok(new { message = $"Device for user {user.Email} deregistered successfully." });
+                }
+
+                Console.WriteLine("Update failed.");
+                return StatusCode(500, new { message = "Failed to update user record." });
             }
             catch (Exception ex)
             {
