@@ -181,8 +181,9 @@ namespace QuickCashJobAPI.Controllers
             public string UserEmailOrPhone { get; set; }
         }
 
+        
+        [Authorize(Policy = "AdminPolicy")]
         [HttpPost("admin/deregister-device")]
-        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> AdminDeregisterDevice([FromBody] DeregisterRequest request)
         {
             try
