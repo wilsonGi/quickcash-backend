@@ -361,13 +361,13 @@ namespace QuickCashJobAPI.Controllers
 
 
             [Required]
-            public DateTime LastTaskDoneDate { get; set; } = DateTime.Now;
+            public DateTime LastTaskDoneDate { get; set; } = DateTime.UtcNow;
 
             [Required]
-            public DateTime LastTaskEmployedDate { get; set; } = DateTime.Now;
+            public DateTime LastTaskEmployedDate { get; set; } = DateTime.UtcNow;
 
             [Required]
-            public DateTime DateJoined { get; set; } = DateTime.Now;
+            public DateTime DateJoined { get; set; } = DateTime.UtcNow;
 
             [Required]
             public string PhoneNumber { get; set; }

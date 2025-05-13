@@ -22,10 +22,10 @@ namespace QuickCashJobAPI.Models
         public int NumberOfTasksEmployed { get; set; } = 0;
 
         [Required]
-        public DateTime LastTaskDoneDate { get; set; } = DateTime.Now;
+        public DateTime LastTaskDoneDate { get; set; } = DateTime.UtcNow;
 
         [Required]
-        public DateTime LastTaskEmployedDate { get; set; } = DateTime.Now;
+        public DateTime LastTaskEmployedDate { get; set; } = DateTime.UtcNow;
 
 
         [Range(0, 100)]
@@ -35,7 +35,7 @@ namespace QuickCashJobAPI.Models
 
 
         [Required]
-        public DateTime DateJoined { get; set; } = DateTime.Now;
+        public DateTime DateJoined { get; set; } = DateTime.UtcNow;
 
         public bool IsDeleted { get; set; } = false;
 
