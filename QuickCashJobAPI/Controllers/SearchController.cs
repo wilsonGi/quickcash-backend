@@ -39,36 +39,9 @@ namespace QuickCashJobAPI.Controllers
                 })
                 .ToListAsync();
 
-            var users = await _context.Users
-                .Include(u => u.UserSkills)
-                    .ThenInclude(us => us.Skill)
-                .Where(u =>
-                    u.Name.ToLower().Contains(query) ||
-                    u.UserSkills.Any(us => us.Skill.Name.ToLower().Contains(query))
-                )
-                .Select(u => new
-                {
-                    u.Id,
-                    u.Name,
-                    Skills = u.UserSkills.Select(us => us.Skill.Name).ToList()
-                })
-                .ToListAsync();
-
-            var categories = await _context.Categories
-                .Where(c => c.CategoryName.ToLower().Contains(query))
-                .Select(c => new
-                {
-                    c.Id,
-                    c.CategoryName,
-                    c.CategoryImage
-                })
-                .ToListAsync();
-
             return Ok(new
             {
-                jobs,
-                users,
-                categories
+                jobs
             });
         }
     }
