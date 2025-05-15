@@ -185,16 +185,16 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-        [Authorize]
+        [AllowAnonymous]
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public ActionResult<IEnumerable<JobDTO>> GetJobs()
         {
-            var currentUser = GetCurrentUser();
-            if (currentUser == null)
-            {
-                return Unauthorized();
-            }
+            //var currentUser = GetCurrentUser();
+            //if (currentUser == null)
+            //{
+            //    return Unauthorized();
+            //}
 
             var user = GetCurrentUser();
             if (!user.IsApproved || user.IsBlocked)
