@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace QuickCashJobAPI.Controllers
 {
-    [Authorize]
+    
     [Route("api/[controller]")]
     [ApiController]
     public class JobController : ControllerBase
