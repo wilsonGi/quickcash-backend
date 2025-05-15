@@ -184,31 +184,29 @@ namespace QuickCashJobAPI.Controllers
             return Ok(jobs);
         }
 
-
         [AllowAnonymous]
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public ActionResult<IEnumerable<JobDTO>> GetJobs()
         {
-            //var currentUser = GetCurrentUser();
-            //if (currentUser == null)
-            //{
-            //    return Unauthorized();
-            //}
+            var currentUser = GetCurrentUser();
 
-            var user = GetCurrentUser();
-            if (!user.IsApproved || user.IsBlocked)
+            // Optional logic for authenticated users only
+            if (currentUser != null)
             {
-                return Forbid("Your account is not approved or is blocked.");
-            }
+                if (!currentUser.IsApproved || currentUser.IsBlocked)
+                {
+                    return Forbid("Your account is not approved or is blocked.");
+                }
 
-            if (!HasValidSubscription(user))
-            {
-                return Forbid();
+                if (!HasValidSubscription(currentUser))
+                {
+                    return Forbid();
+                }
             }
 
             var jobs = _db.Jobs
-                .Where(job => job.UserId != currentUser.Id)
+                .Where(job => currentUser == null || job.UserId != currentUser.Id) // Hide user's own jobs if logged in
                 .Select(job => new JobDTO
                 {
                     Id = job.Id,
@@ -233,6 +231,7 @@ namespace QuickCashJobAPI.Controllers
 
             return Ok(jobs);
         }
+
 
 
         [Authorize]
