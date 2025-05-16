@@ -206,6 +206,7 @@ namespace QuickCashJobAPI.Controllers
             }
 
             var jobs = _db.Jobs
+                .Include(job => job.Category)
                 .Where(job => currentUser == null || job.UserId != currentUser.Id) // Hide user's own jobs if logged in
                 .Select(job => new JobDTO
                 {
