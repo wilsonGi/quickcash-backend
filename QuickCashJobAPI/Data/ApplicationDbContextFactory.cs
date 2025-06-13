@@ -1,9 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Npgsql.EntityFrameworkCore.PostgreSQL;
-
-using Microsoft.Extensions.Configuration;
-using System.IO;
 
 namespace QuickCashJobAPI.Data
 {
@@ -19,7 +15,8 @@ namespace QuickCashJobAPI.Data
             var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
             var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-            optionsBuilder.UseNpgsql(connectionString);
+            optionsBuilder.UseSqlServer(connectionString);
+
 
 
             return new ApplicationDbContext(optionsBuilder.Options);

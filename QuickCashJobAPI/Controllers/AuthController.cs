@@ -1,11 +1,15 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Google.Apis.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
+using QuickCashJobAPI.Data;
 using QuickCashJobAPI.Models;
+using QuickCashJobAPI.Models.DTO;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
@@ -23,17 +27,20 @@ namespace QuickCashJobAPI.Controllers
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IEmailSender _emailSender;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly ApplicationDbContext _db;
 
         public AuthController(IConfiguration configuration, 
             UserManager<ApplicationUser> userManager,
             IEmailSender emailSender,
             RoleManager<IdentityRole> roleManager,
+            ApplicationDbContext db,
             SignInManager<ApplicationUser> signInManager)
         {
             _configuration = configuration;
             _userManager = userManager;
             _roleManager = roleManager;
             _emailSender = emailSender;
+            _db = db;
             _signInManager = signInManager;
         }
 
@@ -176,6 +183,43 @@ namespace QuickCashJobAPI.Controllers
             }
         }
 
+
+        [HttpPost("google-login")]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto model)
+        {
+            var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
+
+            // Check if user exists
+            var user = await _userManager.FindByEmailAsync(payload.Email);
+            if (user == null)
+            {
+                // Register new user
+                user = new ApplicationUser
+                {
+                    Email = payload.Email,
+                    UserName = payload.Email,
+                    Name = payload.Name,
+                    EmailConfirmed = true,
+                    Location = "Not Provided",
+                    DateJoined = DateTime.UtcNow,
+                    LastTaskDoneDate = DateTime.UtcNow,
+                    LastTaskEmployedDate = DateTime.UtcNow,
+                    TrialEndDate = DateTime.UtcNow.AddDays(7),
+                    IsSubscriptionActive = true,
+                    IsApproved = true
+                };
+
+                var result = await _userManager.CreateAsync(user);
+                if (!result.Succeeded)
+                    return BadRequest(result.Errors);
+            }
+
+            // Generate JWT
+            var token = GenerateJwtToken(user, user.IsAdmin, user.IsSubscriptionActive, user.IsApproved);
+            return Ok(token);
+        }
+
+
         public class DeregisterRequest
         {
             public string UserEmailOrPhone { get; set; }
@@ -302,6 +346,35 @@ namespace QuickCashJobAPI.Controllers
                     details = ex.Message
                 });
             }
+        }
+
+        //Firebase Cloud Messagimg (FCM) 
+        [HttpPost("SaveToken")]
+        public async Task<IActionResult> SaveToken([FromBody] TokenDTO model)
+        {
+            var user = await _userManager.FindByIdAsync(model.UserId);
+            if (user == null) return NotFound();
+
+            user.FcmToken = model.FcmToken;
+            await _userManager.UpdateAsync(user);
+
+            return Ok();
+        }
+
+
+        [Authorize]
+        [HttpGet("user")]
+        public async Task<IActionResult> GetMyNotifications()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var notifications = await _db.Notifications
+                .Where(n => n.UserId == user.Id)
+                .OrderByDescending(n => n.CreatedAt)
+                .ToListAsync();
+
+            return Ok(notifications);
         }
 
 

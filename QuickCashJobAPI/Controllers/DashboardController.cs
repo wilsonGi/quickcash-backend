@@ -51,6 +51,7 @@ namespace QuickCashJobAPI.Controllers
                 NumberOfTasksCompleted = user.NumberOfTasksCompleted,
                 UserRating = user.UserRating,
                 Location = user.Location,
+                PhoneNumber  = user.PhoneNumber,
                 LastTaskDoneDate = user.LastTaskDoneDate,
                 LastTaskEmployedDate = user.LastTaskEmployedDate,
                 DateJoined = user.DateJoined,

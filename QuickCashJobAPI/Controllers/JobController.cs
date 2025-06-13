@@ -20,11 +20,18 @@ namespace QuickCashJobAPI.Controllers
         private readonly ApplicationDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUserService _userService;
-        public JobController(ApplicationDbContext db, UserManager<ApplicationUser> userManager, IUserService userService)
+        private readonly NotificationService _notificationService;
+        public JobController(ApplicationDbContext db, 
+            UserManager<ApplicationUser> userManager, 
+            IUserService userService,
+            NotificationService notificationService)
+
         {
             _db = db;
             _userManager = userManager;
             _userService = userService;
+            _notificationService = notificationService;
+
         }
 
         private ApplicationUser GetCurrentUser()
@@ -358,7 +365,7 @@ namespace QuickCashJobAPI.Controllers
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created, Type = typeof(JobDTO))]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult<JobDTO> CreateJob([FromBody] JobCreateDTO jobCreateDTO)
+        public async Task<ActionResult<JobDTO>> CreateJob([FromBody] JobCreateDTO jobCreateDTO)
         {
             if (jobCreateDTO == null)
             {
@@ -411,6 +418,21 @@ namespace QuickCashJobAPI.Controllers
             category.NumberOfInstances++;
             _db.Jobs.Add(job);
             _db.SaveChanges();
+
+            // ✅ Send notification to all subscribed, approved, not-deleted users (except job creator)
+            var recipients = _db.Users
+                .Where(u => u.IsApproved && !u.IsDeleted && u.IsSubscriptionActive && u.Id != user.Id && u.FcmToken != null)
+                .ToList();
+
+            foreach (var recipient in recipients)
+            {
+                await _notificationService.SendNotificationAsync(
+                    recipient.FcmToken!,
+                    "New Job Posted",
+                    $"{user.Name} just posted a new job. Check it out!"
+                );
+            }
+
 
             var jobDto = new JobDTO
             {
@@ -499,6 +521,19 @@ namespace QuickCashJobAPI.Controllers
 
             await _db.SaveChangesAsync();
 
+
+            // ✅ Notify job owner (creator) via both FCM and SignalR
+            if (!string.IsNullOrWhiteSpace(job.User?.FcmToken))
+            {
+                await _notificationService.SendCombinedNotificationAsync(
+                    job.User.Id,
+                    job.User.FcmToken,
+                    "Someone Committed to Your Job",
+                    $"{user.Name} has committed to your job. Tap to view details."
+                );
+            }
+
+
             return Ok(new { message = "Job committed successfully." });
         }
 
@@ -577,10 +612,18 @@ namespace QuickCashJobAPI.Controllers
                 UserName = jc.Contractor.UserName,
                 Email = jc.Contractor.Email,
                 PhoneNumber = jc.Contractor.PhoneNumber,
+
+                // Include skills
                 Skills = _db.UserSkills
                     .Where(us => us.UserId == jc.Contractor.Id)
                     .Select(us => us.Skill.Name)
-                    .ToList()
+                    .ToList(),
+
+            // ✅ Include completed categories
+            CompletedCategories = _db.UserCompletedCategories
+                .Where(uc => uc.UserId == jc.Contractor.Id)
+                .Select(uc => uc.Category.CategoryName)
+                .ToList()
             })
             .ToListAsync();
 
@@ -639,6 +682,20 @@ namespace QuickCashJobAPI.Controllers
             job.ApprovalLongitude = location.Longitude;
 
             await _db.SaveChangesAsync();
+
+            // ✅ Notify the contractor that they were approved
+            var contractor = await _db.Users.FindAsync(contractorId);
+            if (contractor != null && !string.IsNullOrEmpty(contractor.FcmToken))
+            {
+                await _notificationService.SendCombinedNotificationAsync(
+                    contractor.Id,
+                    contractor.FcmToken,
+                    "Your Job Commitment Was Approved",
+                    $"{user.Name} has approved your request. Tap to view job details."
+                );
+
+            }
+
 
             return Ok(new { message = "Contractor approved successfully for the job." });
         }
@@ -733,7 +790,18 @@ namespace QuickCashJobAPI.Controllers
                 return NotFound(new { message = "Contractor not found." });
             }
 
-            
+            var jobOwner = await _db.Users.OfType<ApplicationUser>().FirstOrDefaultAsync(u => u.Id == job.UserId);
+            if (jobOwner != null && !string.IsNullOrEmpty(jobOwner.FcmToken))
+            {
+                await _notificationService.SendCombinedNotificationAsync(
+                    jobOwner.Id,
+                    jobOwner.FcmToken,
+                    "Job Confirmed",
+                    $"{user.Name} has confirmed the job for completion. Tap to review."
+                );
+
+            }
+
             //contractor.LastTaskDoneDate = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -801,6 +869,32 @@ namespace QuickCashJobAPI.Controllers
             user.NumberOfTasksEmployed++;
             user.UserRating = CalculateUserRating(user.UserRating + 10);
             user.LastTaskEmployedDate = DateTime.UtcNow;
+
+            // ✅ Send notification to contractor
+            if (!string.IsNullOrEmpty(contractor.FcmToken))
+            {
+                await _notificationService.SendCombinedNotificationAsync(
+                    contractor.Id,
+                    contractor.FcmToken,
+                    "Job Completed",
+                    $"{user.Name} has completed the job cycle for both of you. Congratulations!"
+                );
+
+            }
+
+
+            var categoryCompleted = await _db.UserCompletedCategories
+            .FirstOrDefaultAsync(uc => uc.UserId == contractor.Id && uc.CategoryId == job.CategoryId);
+
+            if (categoryCompleted == null)
+            {
+                var completedCategory = new UserCompletedCategory
+                {
+                    UserId = contractor.Id,
+                    CategoryId = job.CategoryId
+                };
+                _db.UserCompletedCategories.Add(completedCategory);
+            }
 
             await _db.SaveChangesAsync();
             return Ok(new { message = "Task marked as completed." });

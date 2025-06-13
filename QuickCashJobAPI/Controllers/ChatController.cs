@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QuickCashJobAPI.Data;
 using QuickCashJobAPI.Models;
+using QuickCashJobAPI.Services;
 using System.Security.Claims;
 
 namespace QuickCashJobAPI.Controllers
@@ -13,10 +14,13 @@ namespace QuickCashJobAPI.Controllers
     public class ChatController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly NotificationService _notificationService;
 
-        public ChatController(ApplicationDbContext context)
+
+        public ChatController(ApplicationDbContext context, NotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         [HttpPost("send")]
@@ -31,6 +35,17 @@ namespace QuickCashJobAPI.Controllers
 
             _context.ChatMessages.Add(message);
             await _context.SaveChangesAsync();
+
+            // Send FCM Notification to Receiver
+            var receiver = await _context.Users.FindAsync(message.ReceiverId);
+            if (receiver != null && !string.IsNullOrEmpty(receiver.FcmToken))
+            {
+                await _notificationService.SendNotificationAsync(
+                    receiver.FcmToken,
+                    "📨 New Message",
+                    "You have a new message from someone"
+                );
+            }
 
             return Ok(message);
         }

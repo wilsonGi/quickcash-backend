@@ -49,10 +49,14 @@ namespace QuickCashJobAPI.Models
         public DateTime TrialEndDate { get; set; }
         public bool IsSubscriptionActive { get; set; }
         public string? DeviceId { get; set; }
+        public string? FcmToken { get; set; }
 
+        public List<string> CompletedCategories { get; set; } = new List<string>();
 
         // Navigation property
         public virtual ICollection<JobCommitment> JobCommitments { get; set; } = new List<JobCommitment>();
+        public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+        public virtual ICollection<Advertisement> Advertisements { get; set; } = new List<Advertisement>();
 
     }
 }

@@ -62,52 +62,26 @@ namespace QuickCashJobAPI.Controllers
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<CategoryDTO>> CreateCategory([FromForm] CategoryDTO categoryDTO, IFormFile? imageFile)
+        public async Task<ActionResult<CategoryDTO>> CreateCategory([FromBody] CategoryDTO categoryDTO)
         {
-            if (categoryDTO == null)
+            if (categoryDTO == null || string.IsNullOrWhiteSpace(categoryDTO.CategoryImage))
             {
-                return BadRequest("Invalid category data.");
+                return BadRequest("Invalid category data or image URL missing.");
             }
 
-            string imageUrl = null;
-
-            if (imageFile != null && imageFile.Length > 0)
-            {
-                var uploadsFolder = Path.Combine("wwwroot", "images", "categories");
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                }
-
-                var fileName = Path.GetFileName(imageFile.FileName);
-                var filePath = Path.Combine(uploadsFolder, fileName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await imageFile.CopyToAsync(stream);
-                }
-
-                imageUrl = "/images/categories/" + fileName;
-            }
-
-            // ✅ Now create the category using imageUrl
             var category = new Category
             {
                 CategoryName = categoryDTO.CategoryName,
                 NumberOfInstances = categoryDTO.NumberOfInstances,
-                CategoryImage = imageUrl
+                CategoryImage = categoryDTO.CategoryImage
             };
 
             _db.Categories.Add(category);
             await _db.SaveChangesAsync();
 
             categoryDTO.Id = category.Id;
-            categoryDTO.CategoryImage = imageUrl;
-
             return CreatedAtRoute("GetCategory", new { id = category.Id }, categoryDTO);
         }
-
-
 
 
         [Authorize(Roles = "Admin")]

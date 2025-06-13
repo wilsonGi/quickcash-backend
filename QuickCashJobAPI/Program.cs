@@ -7,28 +7,39 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using QuickCashJobAPI.Services;
-using QuickCashJobAPI.Helpers;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.FileProviders;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
+using QuickCashJobAPI.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Read DATABASE_URL environment variable
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+// Read DATABASE_URL environment variable ||   Production logic commented out:
+//var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-if (!string.IsNullOrEmpty(databaseUrl))
-{
-    // Railway production environment
-    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(connectionString));
-}
-else
-{
-    // Local development environment
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-}
+//if (!string.IsNullOrEmpty(databaseUrl))
+//{
+//    // Railway production environment
+//    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//        options.UseNpgsql(connectionString));
+//}
+//else
+//{
+//    // Local development environment
+//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+//}
+
+// Use only local development environment with SQL Server
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+
+
+
+
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -84,10 +95,20 @@ builder.Services.AddAuthentication(x =>
             return Task.CompletedTask;
         }
     };
+})
+.AddCookie() // Cookie middleware for Google login
+.AddGoogle(options =>
+{
+    var googleAuthSection = builder.Configuration.GetSection("Authentication:Google");
+    options.ClientId = googleAuthSection["ClientId"];
+    options.ClientSecret = googleAuthSection["ClientSecret"];
+    options.CallbackPath = "/signin-google";
 });
 
 builder.Services.AddControllers().AddNewtonsoftJson();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSignalR();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -116,6 +137,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<SubscriptionCheckService>();
@@ -131,6 +153,16 @@ builder.Services.AddCors(options =>
                    .AllowAnyHeader();
         });
 });
+
+
+// Firebase setup
+var firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "keys", "serviceAccountKey.json");
+
+FirebaseApp.Create(new AppOptions
+{
+    Credential = GoogleCredential.FromFile(firebaseKeyPath)
+});
+
 
 var app = builder.Build();
 
@@ -186,6 +218,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/notificationHub");
 app.Run();
 
 // Seed roles
@@ -231,13 +264,15 @@ static async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleM
             DateJoined = DateTime.UtcNow,
             PhoneNumber = "+233534861417",
             IsAdmin = true,
+            IsSubscriptionActive = true,
+            IsApproved = true,
             TrialEndDate = DateTime.MaxValue,
         };
 
         var result = await userManager.CreateAsync(adminUser, password);
         if (result.Succeeded)
         {
-            await userManager.AddToRoleAsync(adminUser, SD.Role_Company);
+            await userManager.AddToRoleAsync(adminUser, SD.Role_Admin);
             Console.WriteLine("Super Admin created successfully!");
         }
         else

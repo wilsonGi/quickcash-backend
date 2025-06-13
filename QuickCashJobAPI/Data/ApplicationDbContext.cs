@@ -19,51 +19,88 @@ namespace QuickCashJobAPI.Data
         public DbSet<JobCommitment> JobCommitments { get; set; }
         public DbSet<Category> Categories { get; set; }
         public DbSet<Blog> blogs { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
         public DbSet<PaymentRequest> PaymentRequests { get; set; }
         public DbSet<Skill> Skills { get; set; }
         public DbSet<UserSkill> UserSkills { get; set; }
+        public DbSet<UserCompletedCategory> UserCompletedCategories { get; set; }
+
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
 
-
+        public DbSet<Advertisement> Advertisements { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<Category>().HasData(
-    new Category { Id = 17, CategoryName = "Automotive", NumberOfInstances = 0, CategoryImage = "/images/categories/automotive.png" },
-    new Category { Id = 18, CategoryName = "Education", NumberOfInstances = 0, CategoryImage = "/images/categories/education.png" },
-    new Category { Id = 19, CategoryName = "Engineering", NumberOfInstances = 0, CategoryImage = "/images/categories/engineering.png" },
-    new Category { Id = 20, CategoryName = "Finance & Accounting", NumberOfInstances = 0, CategoryImage = "/images/categories/finance_accounting.png" },
-    new Category { Id = 21, CategoryName = "Healthcare & Medicine", NumberOfInstances = 0, CategoryImage = "/images/categories/healthcare_medicine.png" },
-    new Category { Id = 22, CategoryName = "Hospitality & Tourism", NumberOfInstances = 0, CategoryImage = "/images/categories/hospitality_tourism.png" },
-    new Category { Id = 23, CategoryName = "Legal", NumberOfInstances = 0, CategoryImage = "/images/categories/legal.png" },
-    new Category { Id = 24, CategoryName = "Logistics & Transportation", NumberOfInstances = 0, CategoryImage = "/images/categories/logistics_transportation.png" },
-    new Category { Id = 25, CategoryName = "Manufacturing", NumberOfInstances = 0, CategoryImage = "/images/categories/manufacturing.png" },
-    new Category { Id = 26, CategoryName = "Marketing & Advertising", NumberOfInstances = 0, CategoryImage = "/images/categories/marketing_advertising.png" },
-    new Category { Id = 27, CategoryName = "Media & Entertainment", NumberOfInstances = 0, CategoryImage = "/images/categories/media_entertainment.png" },
-    new Category { Id = 28, CategoryName = "Mining & Energy", NumberOfInstances = 0, CategoryImage = "/images/categories/mining_energy.png" },
-    new Category { Id = 29, CategoryName = "NGOs & Nonprofits", NumberOfInstances = 0, CategoryImage = "/images/categories/ngos_nonprofits.png" },
-    new Category { Id = 30, CategoryName = "Office & Administration", NumberOfInstances = 0, CategoryImage = "/images/categories/office_administration.png" },
-    new Category { Id = 31, CategoryName = "Pharmaceutical", NumberOfInstances = 0, CategoryImage = "/images/categories/pharmaceutical.png" },
-    new Category { Id = 32, CategoryName = "Public Services & Government", NumberOfInstances = 0, CategoryImage = "/images/categories/public_services_government.png" },
-    new Category { Id = 33, CategoryName = "Real Estate", NumberOfInstances = 0, CategoryImage = "/images/categories/real_estate.png" },
-    new Category { Id = 34, CategoryName = "Retail", NumberOfInstances = 0, CategoryImage = "/images/categories/retail.png" },
-    new Category { Id = 35, CategoryName = "Science & Research", NumberOfInstances = 0, CategoryImage = "/images/categories/science_research.png" },
-    new Category { Id = 36, CategoryName = "Security Services", NumberOfInstances = 0, CategoryImage = "/images/categories/security_services.png" },
-    new Category { Id = 37, CategoryName = "Social Work", NumberOfInstances = 0, CategoryImage = "/images/categories/social_work.png" },
-    new Category { Id = 38, CategoryName = "Software Development", NumberOfInstances = 0, CategoryImage = "/images/categories/software_development.png" },
-    new Category { Id = 39, CategoryName = "Sports & Fitness", NumberOfInstances = 0, CategoryImage = "/images/categories/sports_fitness.png" },
-    new Category { Id = 40, CategoryName = "Telecommunications", NumberOfInstances = 0, CategoryImage = "/images/categories/telecommunications.png" },
-    new Category { Id = 41, CategoryName = "Trades & Technical Services", NumberOfInstances = 0, CategoryImage = "/images/categories/trades_technical.png" },
-    new Category { Id = 42, CategoryName = "Writing & Translation", NumberOfInstances = 0, CategoryImage = "/images/categories/writing_translation.png" },
-    new Category { Id = 43, CategoryName = "Event Planning & Services", NumberOfInstances = 0, CategoryImage = "/images/categories/event_planning.png" },
-    new Category { Id = 44, CategoryName = "Customer Service", NumberOfInstances = 0, CategoryImage = "/images/categories/customer_service.png" },
-    new Category { Id = 45, CategoryName = "Cleaning & Housekeeping", NumberOfInstances = 0, CategoryImage = "/images/categories/cleaning_housekeeping.png" },
-    new Category { Id = 46, CategoryName = "Food Services & Catering", NumberOfInstances = 0, CategoryImage = "/images/categories/food_services.png" },
-    new Category { Id = 47, CategoryName = "Virtual Assistance", NumberOfInstances = 0, CategoryImage = "/images/categories/virtual_assistance.png" },
-    new Category { Id = 48, CategoryName = "Freelancing & Gig Work", NumberOfInstances = 0, CategoryImage = "/images/categories/freelancing_gig_work.png" }
-);
+     new Category { Id = 1, CategoryName = "Agriculture & Farming", NumberOfInstances = 0 },
+     new Category { Id = 2, CategoryName = "Animal Care", NumberOfInstances = 0 },
+     new Category { Id = 3, CategoryName = "Architecture & Interior Design", NumberOfInstances = 0 },
+     new Category { Id = 4, CategoryName = "Arts & Design", NumberOfInstances = 0 },
+     new Category { Id = 5, CategoryName = "Automotive", NumberOfInstances = 0 },
+     new Category { Id = 6, CategoryName = "Beauty & Personal Care", NumberOfInstances = 0 },
+     new Category { Id = 7, CategoryName = "Beauty & Wellness", NumberOfInstances = 0 },
+     new Category { Id = 8, CategoryName = "Blockchain & Cryptocurrency", NumberOfInstances = 0 },
+     new Category { Id = 9, CategoryName = "Business & Consulting", NumberOfInstances = 0 },
+     new Category { Id = 10, CategoryName = "Cleaning & Housekeeping", NumberOfInstances = 0 },
+     new Category { Id = 11, CategoryName = "Consulting & Strategy", NumberOfInstances = 0 },
+     new Category { Id = 12, CategoryName = "Construction", NumberOfInstances = 0 },
+     new Category { Id = 13, CategoryName = "Customer Service", NumberOfInstances = 0 },
+     new Category { Id = 14, CategoryName = "Data Analysis & Data Science", NumberOfInstances = 0 },
+     new Category { Id = 15, CategoryName = "Delivery Services", NumberOfInstances = 0 },
+     new Category { Id = 16, CategoryName = "Domestic Services", NumberOfInstances = 0 },
+     new Category { Id = 17, CategoryName = "E-commerce & Dropshipping", NumberOfInstances = 0 },
+     new Category { Id = 18, CategoryName = "Education", NumberOfInstances = 0 },
+     new Category { Id = 19, CategoryName = "Electrical", NumberOfInstances = 0 },
+     new Category { Id = 20, CategoryName = "Electronics Repair", NumberOfInstances = 0 },
+     new Category { Id = 21, CategoryName = "Engineering", NumberOfInstances = 0 },
+     new Category { Id = 22, CategoryName = "Environmental Services", NumberOfInstances = 0 },
+     new Category { Id = 23, CategoryName = "Event Planning & Services", NumberOfInstances = 0 },
+     new Category { Id = 24, CategoryName = "Fashion & Apparel", NumberOfInstances = 0 },
+     new Category { Id = 25, CategoryName = "Fashion & Tailoring", NumberOfInstances = 0 },
+     new Category { Id = 26, CategoryName = "Finance & Accounting", NumberOfInstances = 0 },
+     new Category { Id = 27, CategoryName = "Fisheries", NumberOfInstances = 0 },
+     new Category { Id = 28, CategoryName = "Food Services & Catering", NumberOfInstances = 0 },
+     new Category { Id = 29, CategoryName = "Freelancing & Gig Work", NumberOfInstances = 0 },
+     new Category { Id = 30, CategoryName = "Game Development", NumberOfInstances = 0 },
+     new Category { Id = 31, CategoryName = "Hairdressing & Barbering", NumberOfInstances = 0 },
+     new Category { Id = 32, CategoryName = "Handyman Services", NumberOfInstances = 0 },
+     new Category { Id = 33, CategoryName = "Healthcare & Medicine", NumberOfInstances = 0 },
+     new Category { Id = 34, CategoryName = "Hospitality & Tourism", NumberOfInstances = 0 },
+     new Category { Id = 35, CategoryName = "Human Resources (HR)", NumberOfInstances = 0 },
+     new Category { Id = 36, CategoryName = "IT Support & Networking", NumberOfInstances = 0 },
+     new Category { Id = 37, CategoryName = "Legal", NumberOfInstances = 0 },
+     new Category { Id = 38, CategoryName = "Logistics & Transportation", NumberOfInstances = 0 },
+     new Category { Id = 39, CategoryName = "Manufacturing", NumberOfInstances = 0 },
+     new Category { Id = 40, CategoryName = "Marketing & Advertising", NumberOfInstances = 0 },
+     new Category { Id = 41, CategoryName = "Media & Entertainment", NumberOfInstances = 0 },
+     new Category { Id = 42, CategoryName = "Mining & Energy", NumberOfInstances = 0 },
+     new Category { Id = 43, CategoryName = "NGOs & Nonprofits", NumberOfInstances = 0 },
+     new Category { Id = 44, CategoryName = "Office & Administration", NumberOfInstances = 0 },
+     new Category { Id = 45, CategoryName = "Pet Services", NumberOfInstances = 0 },
+     new Category { Id = 46, CategoryName = "Pharmaceutical", NumberOfInstances = 0 },
+     new Category { Id = 47, CategoryName = "Photography & Videography", NumberOfInstances = 0 },
+     new Category { Id = 48, CategoryName = "Project Management", NumberOfInstances = 0 },
+     new Category { Id = 49, CategoryName = "Public Services & Government", NumberOfInstances = 0 },
+     new Category { Id = 50, CategoryName = "Real Estate", NumberOfInstances = 0 },
+     new Category { Id = 51, CategoryName = "Retail", NumberOfInstances = 0 },
+     new Category { Id = 52, CategoryName = "Science & Research", NumberOfInstances = 0 },
+     new Category { Id = 53, CategoryName = "Security Services", NumberOfInstances = 0 },
+     new Category { Id = 54, CategoryName = "Social Work", NumberOfInstances = 0 },
+     new Category { Id = 55, CategoryName = "Software Development", NumberOfInstances = 0 },
+     new Category { Id = 56, CategoryName = "Sports & Fitness", NumberOfInstances = 0 },
+     new Category { Id = 57, CategoryName = "Technical Writing", NumberOfInstances = 0 },
+     new Category { Id = 58, CategoryName = "Telecommunications", NumberOfInstances = 0 },
+     new Category { Id = 59, CategoryName = "Trades & Technical Services", NumberOfInstances = 0 },
+     new Category { Id = 60, CategoryName = "Translation & Localization", NumberOfInstances = 0 },
+     new Category { Id = 61, CategoryName = "UX/UI Design", NumberOfInstances = 0 },
+     new Category { Id = 62, CategoryName = "Virtual Assistance", NumberOfInstances = 0 },
+     new Category { Id = 63, CategoryName = "Voice Acting & Audio Services", NumberOfInstances = 0 },
+     new Category { Id = 64, CategoryName = "Writing & Translation", NumberOfInstances = 0 }
+ );
+
+
 
             // Skills seed
             modelBuilder.Entity<Skill>().HasData(
@@ -170,47 +207,7 @@ namespace QuickCashJobAPI.Data
 );
 
 
-            //            modelBuilder.Entity<Category>().HasData(
-            //    new Category { Id = 1, CategoryName = "Agriculture", NumberOfInstances = 0, CategoryImage = "/images/categories/agriculture.png" },
-            //    new Category { Id = 2, CategoryName = "Animal Care", NumberOfInstances = 0, CategoryImage = "/images/categories/animal_care.png" },
-            //    new Category { Id = 3, CategoryName = "Architecture", NumberOfInstances = 0, CategoryImage = "/images/categories/architecture.png" },
-            //    new Category { Id = 4, CategoryName = "Arts & Design", NumberOfInstances = 0, CategoryImage = "/images/categories/arts_design.png" },
-            //    new Category { Id = 5, CategoryName = "Beauty & Wellness", NumberOfInstances = 0, CategoryImage = "/images/categories/beauty_wellness.png" },
-            //    new Category { Id = 6, CategoryName = "Business & Consulting", NumberOfInstances = 0, CategoryImage = "/images/categories/business_consulting.png" },
-            //    new Category { Id = 7, CategoryName = "Construction", NumberOfInstances = 0, CategoryImage = "/images/categories/construction.png" },
-            //    new Category { Id = 8, CategoryName = "Delivery Services", NumberOfInstances = 0, CategoryImage = "/images/categories/delivery_services.png" },
-            //    new Category { Id = 9, CategoryName = "Domestic Services", NumberOfInstances = 0, CategoryImage = "/images/categories/domestic_services.png" },
-            //    new Category { Id = 10, CategoryName = "Electrical", NumberOfInstances = 0, CategoryImage = "/images/categories/electrical.png" },
-            //    new Category { Id = 11, CategoryName = "Electronics Repair", NumberOfInstances = 0, CategoryImage = "/images/categories/electronics_repair.png" },
-            //    new Category { Id = 12, CategoryName = "Fashion & Tailoring", NumberOfInstances = 0, CategoryImage = "/images/categories/fashion_tailoring.png" },
-            //    new Category { Id = 13, CategoryName = "Fisheries", NumberOfInstances = 0, CategoryImage = "/images/categories/fisheries.png" },
-            //    new Category { Id = 14, CategoryName = "Hairdressing & Barbering", NumberOfInstances = 0, CategoryImage = "/images/categories/hairdressing_barbering.png" },
-            //    new Category { Id = 15, CategoryName = "Handyman Services", NumberOfInstances = 0, CategoryImage = "/images/categories/handyman_services.png" },
-            //    new Category { Id = 16, CategoryName = "IT Support & Networking", NumberOfInstances = 0, CategoryImage = "/images/categories/it_support.png" },
-            //    new Category { Id = 17, CategoryName = "Automotive", NumberOfInstances = 0, CategoryImage = "/images/categories/automotive.png" },
-            //    new Category { Id = 18, CategoryName = "Education", NumberOfInstances = 0, CategoryImage = "/images/categories/education.png" },
-            //    new Category { Id = 19, CategoryName = "Engineering", NumberOfInstances = 0, CategoryImage = "/images/categories/engineering.png" },
-            //    new Category { Id = 20, CategoryName = "Finance & Accounting", NumberOfInstances = 0, CategoryImage = "/images/categories/finance_accounting.png" },
-            //    new Category { Id = 21, CategoryName = "Healthcare & Medicine", NumberOfInstances = 0, CategoryImage = "/images/categories/healthcare_medicine.png" },
-            //    new Category { Id = 22, CategoryName = "Hospitality & Tourism", NumberOfInstances = 0, CategoryImage = "/images/categories/hospitality_tourism.png" },
-            //    new Category { Id = 23, CategoryName = "Legal", NumberOfInstances = 0, CategoryImage = "/images/categories/legal.png" },
-            //    new Category { Id = 24, CategoryName = "Logistics & Transportation", NumberOfInstances = 0, CategoryImage = "/images/categories/logistics_transportation.png" },
-            //    new Category { Id = 25, CategoryName = "Manufacturing", NumberOfInstances = 0, CategoryImage = "/images/categories/manufacturing.png" },
-            //    new Category { Id = 26, CategoryName = "Marketing & Advertising", NumberOfInstances = 0, CategoryImage = "/images/categories/marketing_advertising.png" },
-            //    new Category { Id = 27, CategoryName = "Media & Entertainment", NumberOfInstances = 0, CategoryImage = "/images/categories/media_entertainment.png" },
-            //    new Category { Id = 28, CategoryName = "Mining & Energy", NumberOfInstances = 0, CategoryImage = "/images/categories/mining_energy.png" },
-            //    new Category { Id = 29, CategoryName = "NGOs & Nonprofits", NumberOfInstances = 0, CategoryImage = "/images/categories/ngos_nonprofits.png" },
-            //    new Category { Id = 30, CategoryName = "Office & Administration", NumberOfInstances = 0, CategoryImage = "/images/categories/office_administration.png" },
-            //    new Category { Id = 31, CategoryName = "Pharmaceutical", NumberOfInstances = 0, CategoryImage = "/images/categories/pharmaceutical.png" },
-            //    new Category { Id = 32, CategoryName = "Public Services & Government", NumberOfInstances = 0, CategoryImage = "/images/categories/public_services_government.png" },
-            //    new Category { Id = 33, CategoryName = "Real Estate", NumberOfInstances = 0, CategoryImage = "/images/categories/real_estate.png" },
-            //    new Category { Id = 34, CategoryName = "Retail", NumberOfInstances = 0, CategoryImage = "/images/categories/retail.png" },
-            //    new Category { Id = 35, CategoryName = "Science & Research", NumberOfInstances = 0, CategoryImage = "/images/categories/science_research.png" },
-            //    new Category { Id = 36, CategoryName = "Security Services", NumberOfInstances = 0, CategoryImage = "/images/categories/security_services.png" }
-            //);
-
-
-
+           
 
             //Configure the Payout property
             modelBuilder.Entity<Job>()
@@ -220,6 +217,14 @@ namespace QuickCashJobAPI.Data
 
             modelBuilder.Entity<PaymentRequest>()
                 .HasKey(p => p.Id); // Assuming 'Id' is your primary key
+
+            modelBuilder.Entity<PaymentRequest>()
+            .Property(p => p.Amount)
+            .HasPrecision(18, 4);
+
+            modelBuilder.Entity<PaymentTransaction>()
+                .Property(p => p.Amount)
+                .HasPrecision(18, 4);
 
             base.OnModelCreating(modelBuilder);
 

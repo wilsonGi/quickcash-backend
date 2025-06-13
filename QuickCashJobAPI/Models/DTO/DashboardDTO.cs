@@ -15,6 +15,7 @@
         public bool IsApproved { get; set; }
         public DateTime? TrialEndDate { get; set; }
         public string ProfilePhoto { get; set; }
+        public string PhoneNumber { get; set; }
         public int ChatCount { get; set; }
 
 

@@ -119,6 +119,7 @@ namespace QuickCashJobAPI.Controllers
 
 
 
+
         [Authorize]
         [HttpGet("ExpiredSubscribers")]
         public async Task<IActionResult> GetExpiredSubscribers()
