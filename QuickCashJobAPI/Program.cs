@@ -32,13 +32,6 @@ else
         options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 }
 
-// Use only local development environment with SQL Server
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-
-
-
 
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
