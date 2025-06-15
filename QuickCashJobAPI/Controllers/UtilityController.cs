@@ -10,7 +10,7 @@ namespace QuickCashJobAPI.Controllers
         public async Task<IActionResult> GetIp()
         {
             using var httpClient = new HttpClient();
-            var ip = await httpClient.GetStringAsync("https://ifconfig.me");
+            var ip = await httpClient.GetStringAsync("https://ifconfig.me/ip");
             return Ok(ip);
         }
     }
