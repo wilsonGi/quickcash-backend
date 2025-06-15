@@ -15,22 +15,22 @@ using QuickCashJobAPI.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Read DATABASE_URL environment variable ||   Production logic commented out:
-//var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+//Read DATABASE_URL environment variable ||   Production logic commented out:
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-//if (!string.IsNullOrEmpty(databaseUrl))
-//{
-//    // Railway production environment
-//    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//        options.UseNpgsql(connectionString));
-//}
-//else
-//{
-//    // Local development environment
-//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-//}
+if (!string.IsNullOrEmpty(databaseUrl))
+{
+    // Railway production environment
+    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(connectionString));
+}
+else
+{
+    // Local development environment
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+}
 
 // Use only local development environment with SQL Server
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
