@@ -164,6 +164,12 @@ FirebaseApp.Create(new AppOptions
 });
 
 
+//OMLY FOR SEVERLESS DEPLOYMEMT OM RAILWAY, remove whem you pay for a paid plam.
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+builder.WebHost.UseUrls($"http://*:{port}");
+
+
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
