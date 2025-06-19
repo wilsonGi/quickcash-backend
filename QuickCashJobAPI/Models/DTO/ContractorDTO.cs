@@ -26,6 +26,8 @@
         public string PhoneNumber { get; set; }
         public List<string> Skills { get; set; }
         public List<string> CompletedCategories { get; set; }
+        public List<string> EmployedCategories { get; set; }
+
     }
 
 }

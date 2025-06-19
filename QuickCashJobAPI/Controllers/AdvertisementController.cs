@@ -35,6 +35,12 @@ namespace QuickCashJobAPI.Controllers
         {
             var ads = await _db.Advertisements
                 .Include(a => a.User)
+                .Where(a =>
+                    a.IsSubscriptionActive &&
+                    a.User != null &&
+                    a.User.IsApproved &&
+                    a.User.IsSubscriptionActive &&
+                    !a.User.IsDeleted)
                 .Select(a => new AdvertisementDTO
                 {
                     Id = a.Id,
@@ -67,7 +73,7 @@ namespace QuickCashJobAPI.Controllers
             var ad = new Advertisement
             {
                 Category = model.Category,
-                Name = model.Name,
+                Name = string.IsNullOrWhiteSpace(model.Name) ? user.Name : model.Name,
                 Description = model.Description,
                 Area = model.Area,
                 Contact = model.Contact,

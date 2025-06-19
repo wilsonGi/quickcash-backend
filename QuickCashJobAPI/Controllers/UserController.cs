@@ -107,6 +107,8 @@ namespace QuickCashJobAPI.Controllers
             return Ok(userList);
         }
 
+        
+
 
         [HttpGet("profile-photo/{userId}")]
         public async Task<IActionResult> GetProfilePhoto(string userId)

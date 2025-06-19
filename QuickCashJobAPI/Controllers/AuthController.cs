@@ -184,6 +184,44 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var user = await _userManager.Users
+                .Where(u => u.Id == userId)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.Email,
+                    u.Name,
+                    u.Location,
+                    u.NumberOfTasksCompleted,
+                    u.NumberOfTasksEmployed,
+                    u.LastTaskDoneDate,
+                    u.LastTaskEmployedDate,
+                    u.UserRating,
+                    u.PhoneNumber,
+                    u.DateJoined,
+                    u.UserName,
+                    u.IsBlocked,
+                    u.IsDeleted,
+                    u.IsAdmin,
+                    u.IsSubscriptionActive,
+                    u.IsApproved,
+                    u.TrialEndDate,
+                    // Optional: include skills or categories if needed
+                })
+                .FirstOrDefaultAsync();
+
+            return Ok(user);
+        }
+
+
+
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto model)
         {

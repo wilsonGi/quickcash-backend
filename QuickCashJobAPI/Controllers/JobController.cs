@@ -623,7 +623,14 @@ namespace QuickCashJobAPI.Controllers
             CompletedCategories = _db.UserCompletedCategories
                 .Where(uc => uc.UserId == jc.Contractor.Id)
                 .Select(uc => uc.Category.CategoryName)
+                .ToList(),
+
+            EmployedCategories = _db.Jobs
+                .Where(j => j.UserId == jc.Contractor.Id)
+                .Select(j => j.Category.CategoryName)
+                .Distinct()
                 .ToList()
+
             })
             .ToListAsync();
 
@@ -928,52 +935,36 @@ namespace QuickCashJobAPI.Controllers
 
 
         [Authorize]
-        [HttpPatch("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public IActionResult UpdatePartialJob(int id, [FromBody] JsonPatchDocument<JobUpdateDTO> patchDto)
+        public IActionResult UpdateJob(int id, [FromBody] JobUpdateDTO jobDto)
         {
-            if (patchDto == null || id == 0)
+            if (jobDto == null || id == 0)
             {
                 return BadRequest();
             }
 
             var job = _db.Jobs.FirstOrDefault(u => u.Id == id);
-
             if (job == null)
             {
                 return NotFound();
             }
 
-            var jobDto = new JobUpdateDTO
-            {
-                Description = job.Description,
-                Location = job.Location,
-                AudioDescription = job.AudioDescription,
-                Payout = job.Payout,
-                Negotiable = job.Negotiable
-            };
-
-            // Apply patch document to jobDto
-            patchDto.ApplyTo(jobDto, ModelState);
-
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            // Update the job entity with the patched data
             job.Description = jobDto.Description;
             job.Location = jobDto.Location;
             job.AudioDescription = jobDto.AudioDescription;
             job.Payout = jobDto.Payout;
             job.Negotiable = jobDto.Negotiable;
+            job.CategoryId = jobDto.CategoryId; // ← Include this since it's in the DTO
 
             _db.SaveChanges();
 
-            return Ok(job);
+            return Ok(new { message = "Job updated successfully", job });
+
         }
+
 
 
         [Authorize]

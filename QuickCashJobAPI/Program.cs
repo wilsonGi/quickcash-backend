@@ -20,17 +20,18 @@ var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // Railway production environment
+    // ✅ Use PostgreSQL (Npgsql) when running on Railway
     var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(connectionString));
 }
 else
 {
-    // Local development environment
+    // ✅ Use SQL Server locally
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 }
+
 
 
 
@@ -193,28 +194,28 @@ string ConvertDatabaseUrlToConnectionString(string databaseUrl)
     return $"Host={uri.Host};Port={uri.Port};Username={userInfo[0]};Password={userInfo[1]};Database={uri.AbsolutePath.TrimStart('/')};SSL Mode=Require;Trust Server Certificate=true";
 }
 
-// Run migrations and seed data
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
+//// Run migrations and seed data
+//using (var scope = app.Services.CreateScope())
+//{
+//    var services = scope.ServiceProvider;
 
-    try
-    {
-        var context = services.GetRequiredService<ApplicationDbContext>();
-        context.Database.Migrate();
+//    try
+//    {
+//        var context = services.GetRequiredService<ApplicationDbContext>();
+//        context.Database.Migrate();
 
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+//        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+//        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        await SeedRolesAsync(roleManager);
-        await SeedSuperAdmin(userManager, roleManager, context);
-    }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
-    }
-}
+//        await SeedRolesAsync(roleManager);
+//        await SeedSuperAdmin(userManager, roleManager, context);
+//    }
+//    catch (Exception ex)
+//    {
+//        var logger = services.GetRequiredService<ILogger<Program>>();
+//        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
+//    }
+//}
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/notificationHub");
@@ -235,7 +236,7 @@ static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
     }
 }
 
-// Seed super admin
+//Seed super admin
 static async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext context)
 {
     if (!userManager.Users.Any())

@@ -51,7 +51,8 @@ namespace QuickCashJobAPI.Models
         public string? DeviceId { get; set; }
         public string? FcmToken { get; set; }
 
-        public List<string> CompletedCategories { get; set; } = new List<string>();
+
+
 
         // Navigation property
         public virtual ICollection<JobCommitment> JobCommitments { get; set; } = new List<JobCommitment>();
