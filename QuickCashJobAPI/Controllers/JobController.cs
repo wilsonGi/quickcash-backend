@@ -34,22 +34,89 @@ namespace QuickCashJobAPI.Controllers
 
         }
 
-        private ApplicationUser GetCurrentUser()
+        //private ApplicationUser GetCurrentUser()
+        //{
+        //    var userClaims = HttpContext.User.Identity as ClaimsIdentity;
+        //    if (userClaims == null)
+        //    {
+        //        return null;
+        //    }
+
+        //    var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        //    if (string.IsNullOrEmpty(userId))
+        //    {
+        //        return null;
+        //    }
+
+        //    return _db.Users.OfType<ApplicationUser>().FirstOrDefault(u => u.Id == userId);
+        //}
+
+
+
+        private async Task<ApplicationUser?> GetCurrentUserAsync()
         {
-            var userClaims = HttpContext.User.Identity as ClaimsIdentity;
-            if (userClaims == null)
+            var identity = HttpContext.User.Identity as ClaimsIdentity;
+            if (identity == null || !identity.IsAuthenticated)
             {
                 return null;
             }
 
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
+            var userId = identity.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
             {
                 return null;
             }
 
-            return _db.Users.OfType<ApplicationUser>().FirstOrDefault(u => u.Id == userId);
+            return await _db.Users
+                .OfType<ApplicationUser>()
+                .FirstOrDefaultAsync(u => u.Id == userId);
         }
+
+
+
+        [Authorize]
+        [HttpGet("myjobs")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<IEnumerable<JobDTO>>> GetMyJobs()
+        {
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return Unauthorized(new { message = "User not found." });
+            }
+
+            var jobs = await _db.Jobs
+                .Include(job => job.Category)
+                .Where(job => job.UserId == currentUser.Id) // Include only jobs created by the current user
+                .Select(job => new JobDTO
+                {
+                    Id = job.Id,
+                    CategoryId = job.CategoryId,
+                    CategoryName = job.Category.CategoryName,
+                    Description = job.Description,
+                    Location = job.Location,
+                    Status = job.Status,
+                    DatePosted = job.DatePosted,
+                    AudioDescription = job.AudioDescription,
+                    Payout = job.Payout,
+                    Negotiable = job.Negotiable,
+                    UserName = job.UserName,
+                    NumberOfTasksCompleted = job.NumberOfTasksCompleted,
+                    NumberOfTasksEmployed = job.NumberOfTasksEmployed,
+                    UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
+                    UserRating = job.UserRating,
+                    UserPhoneNumber = job.UserPhoneNumber,
+                    ShowContact = job.ShowContact,
+
+                }).ToListAsync();
+
+            return Ok(jobs);
+        }
+
+
+
+
 
 
 
@@ -152,51 +219,51 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-        [Authorize]
-        [HttpGet("myjobs")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public ActionResult<IEnumerable<JobDTO>> GetMyJobs()
-        {
-            var currentUser = GetCurrentUser();
-            if (currentUser == null)
-            {
-                return Unauthorized(new { message = "User not found." });
-            }
+        //[Authorize]
+        //[HttpGet("myjobs")]
+        //[ProducesResponseType(StatusCodes.Status200OK)]
+        //public ActionResult<IEnumerable<JobDTO>> GetMyJobs()
+        //{
+        //    var currentUser = GetCurrentUser();
+        //    if (currentUser == null)
+        //    {
+        //        return Unauthorized(new { message = "User not found." });
+        //    }
 
-            var jobs = _db.Jobs
-                .Include(job => job.Category)
-                .Where(job => job.UserId == currentUser.Id) // Include only jobs created by the current user
-                .Select(job => new JobDTO
-                {
-                    Id = job.Id,
-                    CategoryId = job.CategoryId,
-                    CategoryName = job.Category.CategoryName,
-                    Description = job.Description,
-                    Location = job.Location,
-                    Status = job.Status,
-                    DatePosted = job.DatePosted,
-                    AudioDescription = job.AudioDescription,
-                    Payout = job.Payout,
-                    Negotiable = job.Negotiable,
-                    UserName = job.UserName,
-                    NumberOfTasksCompleted = job.NumberOfTasksCompleted,
-                    NumberOfTasksEmployed = job.NumberOfTasksEmployed,
-                    UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
-                    UserRating = job.UserRating,
-                    UserPhoneNumber = job.UserPhoneNumber,
-                    ShowContact = job.ShowContact,
+        //    var jobs = _db.Jobs
+        //        .Include(job => job.Category)
+        //        .Where(job => job.UserId == currentUser.Id) // Include only jobs created by the current user
+        //        .Select(job => new JobDTO
+        //        {
+        //            Id = job.Id,
+        //            CategoryId = job.CategoryId,
+        //            CategoryName = job.Category.CategoryName,
+        //            Description = job.Description,
+        //            Location = job.Location,
+        //            Status = job.Status,
+        //            DatePosted = job.DatePosted,
+        //            AudioDescription = job.AudioDescription,
+        //            Payout = job.Payout,
+        //            Negotiable = job.Negotiable,
+        //            UserName = job.UserName,
+        //            NumberOfTasksCompleted = job.NumberOfTasksCompleted,
+        //            NumberOfTasksEmployed = job.NumberOfTasksEmployed,
+        //            UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
+        //            UserRating = job.UserRating,
+        //            UserPhoneNumber = job.UserPhoneNumber,
+        //            ShowContact = job.ShowContact,
 
-                }).ToList();
+        //        }).ToList();
 
-            return Ok(jobs);
-        }
+        //    return Ok(jobs);
+        //}
 
         [AllowAnonymous]
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public ActionResult<IEnumerable<JobDTO>> GetJobs()
+        public async Task<ActionResult<IEnumerable<JobDTO>>> GetJobs()
         {
-            var currentUser = GetCurrentUser();
+            var currentUser = await  GetCurrentUserAsync();
 
             // Optional logic for authenticated users only
             if (currentUser != null)
@@ -212,7 +279,7 @@ namespace QuickCashJobAPI.Controllers
                 }
             }
 
-            var jobs = _db.Jobs
+            var jobs = await _db.Jobs
                 .Include(job => job.Category)
                 .Where(job => currentUser == null || job.UserId != currentUser.Id) // Hide user's own jobs if logged in
                 .Select(job => new JobDTO
@@ -235,11 +302,109 @@ namespace QuickCashJobAPI.Controllers
                     UserRating = job.UserRating,
                     UserPhoneNumber = job.UserPhoneNumber,
                     ShowContact = job.ShowContact,
-                }).ToList();
+                }).ToListAsync();
 
             return Ok(jobs);
         }
 
+
+
+        //[Authorize]
+        //[HttpGet("{id:int}", Name = "GetJob")]
+        //[ProducesResponseType(StatusCodes.Status200OK)]
+        //[ProducesResponseType(StatusCodes.Status400BadRequest)]
+        //[ProducesResponseType(StatusCodes.Status404NotFound)]
+        //public ActionResult<JobDTO> GetJob(int id)
+        //{
+        //    if (id == 0)
+        //    {
+        //        return BadRequest();
+        //    }
+
+        //    var user = GetCurrentUser();
+        //    if (!user.IsApproved || user.IsBlocked)
+        //    {
+        //        return Forbid("Your account is not approved or is blocked.");
+        //    }
+
+        //    var job = _db.Jobs.Select(job => new JobDTO
+        //    {
+        //        Id = job.Id,
+        //        CategoryId = job.CategoryId,
+        //        CategoryName = job.Category.CategoryName,
+        //        Description = job.Description,
+        //        Location = job.Location,
+        //        Status = job.Status,
+        //        DatePosted = job.DatePosted,
+        //        AudioDescription = job.AudioDescription,
+        //        Payout = job.Payout,
+        //        Negotiable = job.Negotiable,
+        //        UserName = job.UserName,
+        //        NumberOfTasksCompleted = job.NumberOfTasksCompleted,
+        //        NumberOfTasksEmployed = job.NumberOfTasksEmployed,
+        //        UserLastTaskDoneDate = job.UserLastTaskDoneDate,
+        //        UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
+        //        UserRating = job.UserRating,
+        //        UserPhoneNumber = job.UserPhoneNumber,
+        //        ShowContact = job.ShowContact,
+        //    }).FirstOrDefault(u => u.Id == id);
+
+        //    if (job == null)
+        //    {
+        //        return NotFound();
+        //    }
+
+        //    // Get the UserId separately
+        //    var jobOwnerId = _db.Jobs.Where(j => j.Id == id).Select(j => j.UserId).FirstOrDefault();
+
+        //    var currentUser = GetCurrentUser();
+        //    if (currentUser == null || jobOwnerId != currentUser.Id)
+        //    {
+        //        return Unauthorized();
+        //    }
+
+        //    return Ok(job);
+        //}
+
+
+        //[Authorize]
+        //[HttpGet("all")]
+        //[ProducesResponseType(StatusCodes.Status200OK)]
+        //public ActionResult<IEnumerable<JobDTO>> GetAllJobs()
+        //{
+        //    var user = GetCurrentUser();
+        //    if (user == null)
+        //        return Unauthorized();
+
+        //    if (!user.IsApproved || user.IsBlocked)
+        //        return Forbid("Your account is not approved or is blocked.");
+
+        //    var jobs = _db.Jobs
+        //        .Select(job => new JobDTO
+        //        {
+        //            Id = job.Id,
+        //            CategoryId = job.CategoryId,
+        //            CategoryName = job.Category.CategoryName,
+        //            Description = job.Description,
+        //            Location = job.Location,
+        //            Status = job.Status,
+        //            DatePosted = DateTime.SpecifyKind(job.DatePosted, DateTimeKind.Utc),
+        //            AudioDescription = job.AudioDescription,
+        //            Payout = job.Payout,
+        //            Negotiable = job.Negotiable,
+        //            UserName = job.UserName,
+        //            NumberOfTasksCompleted = job.NumberOfTasksCompleted,
+        //            NumberOfTasksEmployed = job.NumberOfTasksEmployed,
+        //            UserLastTaskDoneDate = job.UserLastTaskDoneDate,
+        //            UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
+        //            UserRating = job.UserRating,
+        //            UserPhoneNumber = job.UserPhoneNumber,
+        //            ShowContact = job.ShowContact,
+        //        }).ToList();
+
+
+        //    return Ok(jobs);
+        //}
 
 
         [Authorize]
@@ -247,51 +412,54 @@ namespace QuickCashJobAPI.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public ActionResult<JobDTO> GetJob(int id)
+        public async Task<ActionResult<JobDTO>> GetJob(int id)
         {
             if (id == 0)
             {
                 return BadRequest();
             }
 
-            var user = GetCurrentUser();
-            if (!user.IsApproved || user.IsBlocked)
+            var user = await GetCurrentUserAsync();
+            if (user == null || !user.IsApproved || user.IsBlocked)
             {
                 return Forbid("Your account is not approved or is blocked.");
             }
 
-            var job = _db.Jobs.Select(job => new JobDTO
-            {
-                Id = job.Id,
-                CategoryId = job.CategoryId,
-                CategoryName = job.Category.CategoryName,
-                Description = job.Description,
-                Location = job.Location,
-                Status = job.Status,
-                DatePosted = job.DatePosted,
-                AudioDescription = job.AudioDescription,
-                Payout = job.Payout,
-                Negotiable = job.Negotiable,
-                UserName = job.UserName,
-                NumberOfTasksCompleted = job.NumberOfTasksCompleted,
-                NumberOfTasksEmployed = job.NumberOfTasksEmployed,
-                UserLastTaskDoneDate = job.UserLastTaskDoneDate,
-                UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
-                UserRating = job.UserRating,
-                UserPhoneNumber = job.UserPhoneNumber,
-                ShowContact = job.ShowContact,
-            }).FirstOrDefault(u => u.Id == id);
+            var job = await _db.Jobs
+                .Select(job => new JobDTO
+                {
+                    Id = job.Id,
+                    CategoryId = job.CategoryId,
+                    CategoryName = job.Category.CategoryName,
+                    Description = job.Description,
+                    Location = job.Location,
+                    Status = job.Status,
+                    DatePosted = job.DatePosted,
+                    AudioDescription = job.AudioDescription,
+                    Payout = job.Payout,
+                    Negotiable = job.Negotiable,
+                    UserName = job.UserName,
+                    NumberOfTasksCompleted = job.NumberOfTasksCompleted,
+                    NumberOfTasksEmployed = job.NumberOfTasksEmployed,
+                    UserLastTaskDoneDate = job.UserLastTaskDoneDate,
+                    UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
+                    UserRating = job.UserRating,
+                    UserPhoneNumber = job.UserPhoneNumber,
+                    ShowContact = job.ShowContact,
+                })
+                .FirstOrDefaultAsync(u => u.Id == id);
 
             if (job == null)
             {
                 return NotFound();
             }
 
-            // Get the UserId separately
-            var jobOwnerId = _db.Jobs.Where(j => j.Id == id).Select(j => j.UserId).FirstOrDefault();
+            var jobOwnerId = await _db.Jobs
+                .Where(j => j.Id == id)
+                .Select(j => j.UserId)
+                .FirstOrDefaultAsync();
 
-            var currentUser = GetCurrentUser();
-            if (currentUser == null || jobOwnerId != currentUser.Id)
+            if (jobOwnerId != user.Id)
             {
                 return Unauthorized();
             }
@@ -303,16 +471,17 @@ namespace QuickCashJobAPI.Controllers
         [Authorize]
         [HttpGet("all")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public ActionResult<IEnumerable<JobDTO>> GetAllJobs()
+        public async Task<ActionResult<IEnumerable<JobDTO>>> GetAllJobs()
         {
-            var user = GetCurrentUser();
+            var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized();
 
             if (!user.IsApproved || user.IsBlocked)
                 return Forbid("Your account is not approved or is blocked.");
 
-            var jobs = _db.Jobs
+            var jobs = await _db.Jobs
+                .Include(job => job.Category)
                 .Select(job => new JobDTO
                 {
                     Id = job.Id,
@@ -333,11 +502,12 @@ namespace QuickCashJobAPI.Controllers
                     UserRating = job.UserRating,
                     UserPhoneNumber = job.UserPhoneNumber,
                     ShowContact = job.ShowContact,
-                }).ToList();
-
+                })
+                .ToListAsync();
 
             return Ok(jobs);
         }
+
 
 
         [HttpPost("toggle-show-contact/{jobId}")]
@@ -373,14 +543,14 @@ namespace QuickCashJobAPI.Controllers
             }
 
 
-            var category = _db.Categories.FirstOrDefault(c => c.Id == jobCreateDTO.CategoryId);
+            var category = await _db.Categories.FirstOrDefaultAsync(c => c.Id == jobCreateDTO.CategoryId);
             if (category == null)
             {
                 return BadRequest(new { message = "Invalid Category ID" });
             }
 
 
-            var user = GetCurrentUser();
+            var user = await GetCurrentUserAsync();
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found." });
@@ -417,7 +587,7 @@ namespace QuickCashJobAPI.Controllers
 
             category.NumberOfInstances++;
             _db.Jobs.Add(job);
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
 
             // ✅ Send notification to all subscribed, approved, not-deleted users (except job creator)
             var recipients = _db.Users
@@ -471,7 +641,7 @@ namespace QuickCashJobAPI.Controllers
                 return NotFound(new { message = "Job not found." });
             }
 
-            var user = GetCurrentUser();
+            var user = await GetCurrentUserAsync();
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found." });
@@ -542,15 +712,15 @@ namespace QuickCashJobAPI.Controllers
         [Authorize]
         [HttpGet("committed")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public ActionResult<IEnumerable<JobDTO>> GetCommittedJobs()
+        public async Task<ActionResult<IEnumerable<JobDTO>>> GetCommittedJobs()
         {
-            var currentUser = GetCurrentUser();
+            var currentUser = await GetCurrentUserAsync();
             if (currentUser == null)
             {
                 return Unauthorized("User not found.");
             }
 
-            var committedJobs = _db.JobCommitments
+            var committedJobs = await _db.JobCommitments
                 .Where(jc => jc.ContractorId == currentUser.Id) // Filter by committed jobs for current user
                 .Select(jc => new JobDTO
                 {
@@ -571,7 +741,7 @@ namespace QuickCashJobAPI.Controllers
                     UserRating = jc.Job.UserRating,
                     UserPhoneNumber = jc.Job.UserPhoneNumber
                 })
-                .ToList();
+                .ToListAsync();
 
             return Ok(committedJobs);
         }
@@ -658,7 +828,7 @@ namespace QuickCashJobAPI.Controllers
                 return NotFound(new { message = "Job not found." });
             }
 
-            var user = GetCurrentUser();
+            var user = await GetCurrentUserAsync();
             if (user == null || !user.IsApproved || user.IsBlocked)
             {
                 return Unauthorized(new { message = "User is not authorized." });
@@ -721,7 +891,7 @@ namespace QuickCashJobAPI.Controllers
                 return NotFound(new { message = "Job not found." });
             }
 
-            var user = GetCurrentUser();
+            var user = await GetCurrentUserAsync();
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found." });
@@ -765,7 +935,7 @@ namespace QuickCashJobAPI.Controllers
                 return NotFound(new { message = "Job not found." });
             }
 
-            var user = GetCurrentUser();
+            var user = await GetCurrentUserAsync();
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found." });
@@ -830,7 +1000,7 @@ namespace QuickCashJobAPI.Controllers
                 return NotFound(new { message = "Job not found." });
             }
 
-            var user = GetCurrentUser();
+            var user = await GetCurrentUserAsync();
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found." });

@@ -235,7 +235,7 @@ namespace QuickCashJobAPI.Data
                 .Property(p => p.Amount)
                 .HasPrecision(18, 4);
 
-            base.OnModelCreating(modelBuilder);
+            //base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<JobCommitment>()
                 .HasOne(jc => jc.Job)

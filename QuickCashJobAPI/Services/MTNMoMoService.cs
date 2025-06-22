@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using QuickCashJobAPI.Data;
 using QuickCashJobAPI.Models;
 using System.Text.Json;
@@ -10,28 +10,23 @@ namespace QuickCashJobAPI.Services
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<MTNMoMoService> _logger;
-        private readonly string _apiKey;
-        private readonly string _subscriptionKey;
-        private readonly string _baseUrl;
-        private readonly IConfiguration _configuration;
+        private readonly MTNMoMoSettings _settings;
         private readonly ApplicationDbContext _dbContext;
+        private readonly string _baseUrl = "https://sandbox.momodeveloper.mtn.com"; // Change to live in production
 
-
-        public MTNMoMoService(HttpClient httpClient, IConfiguration configuration, ILogger<MTNMoMoService> logger, ApplicationDbContext dbContext)
+        public MTNMoMoService(HttpClient httpClient, IOptions<MTNMoMoSettings> options, ILogger<MTNMoMoService> logger, ApplicationDbContext dbContext)
         {
             _httpClient = httpClient;
             _logger = logger;
             _dbContext = dbContext;
-            _apiKey = configuration["MTNMoMo:ApiKey"];
-            _subscriptionKey = configuration["MTNMoMo:SubscriptionKey"];
-            _baseUrl = "https://sandbox.momodeveloper.mtn.com"; // Change to live in production
+            _settings = options.Value;
         }
 
         public async Task<bool> ProcessPayment(string phoneNumber, decimal amount, string userId)
         {
             try
             {
-                var referenceId = Guid.NewGuid().ToString(); // Unique transaction ID
+                var referenceId = Guid.NewGuid().ToString();
                 var token = await GetAccessToken();
 
                 var paymentRequest = new
@@ -44,7 +39,6 @@ namespace QuickCashJobAPI.Services
                     payeeNote = "QuickCash Subscription"
                 };
 
-                // Create and store the transaction
                 var transaction = new PaymentTransaction
                 {
                     ReferenceId = referenceId,
@@ -57,14 +51,12 @@ namespace QuickCashJobAPI.Services
                 _dbContext.PaymentTransactions.Add(transaction);
                 await _dbContext.SaveChangesAsync();
 
-                // Set headers
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 _httpClient.DefaultRequestHeaders.Add("X-Reference-Id", referenceId);
                 _httpClient.DefaultRequestHeaders.Add("X-Target-Environment", "sandbox");
-                _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _subscriptionKey);
+                _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _settings.SubscriptionKey);
 
-                // Send payment request
                 var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/collection/v1_0/requesttopay", paymentRequest);
 
                 if (response.IsSuccessStatusCode)
@@ -82,9 +74,7 @@ namespace QuickCashJobAPI.Services
             }
         }
 
-
-
-        public async Task<string> GetTransactionStatus(string referenceId)
+        public async Task<string?> GetTransactionStatus(string referenceId)
         {
             try
             {
@@ -93,7 +83,7 @@ namespace QuickCashJobAPI.Services
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 _httpClient.DefaultRequestHeaders.Add("X-Target-Environment", "sandbox");
-                _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _subscriptionKey);
+                _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _settings.SubscriptionKey);
 
                 var response = await _httpClient.GetAsync($"{_baseUrl}/collection/v1_0/requesttopay/{referenceId}");
                 var responseBody = await response.Content.ReadAsStringAsync();
@@ -126,27 +116,24 @@ namespace QuickCashJobAPI.Services
             }
         }
 
-
         private async Task<string> GetAccessToken()
         {
             try
             {
-                // Retrieve values from appsettings.json
-                var apiUser = _configuration["MTNMoMo:ApiUser"];
-                var apiKey = _configuration["MTNMoMo:ApiKey"];
+                var apiUser = Environment.GetEnvironmentVariable("MTN_API_USER");
+                var apiKey = _settings.ApiKey;
 
                 if (string.IsNullOrEmpty(apiUser) || string.IsNullOrEmpty(apiKey))
                 {
-                    _logger.LogError("API User or API Key is missing in appsettings.json.");
+                    _logger.LogError("MoMo API credentials are missing.");
                     throw new Exception("Missing MoMo API credentials.");
                 }
 
-                // Encode ApiUser:ApiKey in Base64 for Basic Authentication
                 var encodedCredentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{apiUser}:{apiKey}"));
 
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Authorization", $"Basic {encodedCredentials}");
-                _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _subscriptionKey);
+                _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _settings.SubscriptionKey);
 
                 var response = await _httpClient.PostAsync($"{_baseUrl}/collection/token/", null);
 
@@ -158,7 +145,7 @@ namespace QuickCashJobAPI.Services
 
                 var responseBody = await response.Content.ReadAsStringAsync();
                 using var jsonDoc = JsonDocument.Parse(responseBody);
-                return jsonDoc.RootElement.GetProperty("access_token").GetString();
+                return jsonDoc.RootElement.GetProperty("access_token").GetString()!;
             }
             catch (Exception ex)
             {
@@ -166,7 +153,5 @@ namespace QuickCashJobAPI.Services
                 throw;
             }
         }
-
-
     }
 }

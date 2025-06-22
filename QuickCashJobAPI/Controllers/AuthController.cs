@@ -28,10 +28,12 @@ namespace QuickCashJobAPI.Controllers
         private readonly IEmailSender _emailSender;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly ApplicationDbContext _db;
+        private readonly ILogger<AuthController> _logger;
 
         public AuthController(IConfiguration configuration, 
             UserManager<ApplicationUser> userManager,
             IEmailSender emailSender,
+            ILogger<AuthController> logger,
             RoleManager<IdentityRole> roleManager,
             ApplicationDbContext db,
             SignInManager<ApplicationUser> signInManager)
@@ -41,6 +43,7 @@ namespace QuickCashJobAPI.Controllers
             _roleManager = roleManager;
             _emailSender = emailSender;
             _db = db;
+            _logger = logger;
             _signInManager = signInManager;
         }
 
@@ -178,7 +181,7 @@ namespace QuickCashJobAPI.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error during registration: {ex.Message}");
+                _logger.LogError(ex, "Error during registration.");
                 return StatusCode(500, new { message = ex.Message });
             }
         }
@@ -270,20 +273,20 @@ namespace QuickCashJobAPI.Controllers
         {
             try
             {
-                Console.WriteLine($"Deregistering for: {request.UserEmailOrPhone}");
+                _logger.LogInformation("Deregistering for: {UserIdentifier}", request.UserEmailOrPhone);
 
                 var user = _userManager.Users
                     .FirstOrDefault(u => u.Email == request.UserEmailOrPhone || u.PhoneNumber == request.UserEmailOrPhone);
 
                 if (user == null)
                 {
-                    Console.WriteLine("User not found.");
+                    _logger.LogWarning("User not found.");
                     return NotFound(new { message = "User not found." });
                 }
 
                 if (string.IsNullOrEmpty(user.DeviceId))
                 {
-                    Console.WriteLine("No device registered.");
+                    _logger.LogInformation("No device registered.");
                     return BadRequest(new { message = "No device is currently registered for this user." });
                 }
 
@@ -292,16 +295,16 @@ namespace QuickCashJobAPI.Controllers
 
                 if (result.Succeeded)
                 {
-                    Console.WriteLine("Device deregistered.");
+                    _logger.LogInformation("Device deregistered successfully.");
                     return Ok(new { message = $"Device for user {user.Email} deregistered successfully." });
                 }
 
-                Console.WriteLine("Update failed.");
+                _logger.LogError("Device update failed.");
                 return StatusCode(500, new { message = "Failed to update user record." });
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error during admin device deregistration: {ex.Message}");
+                _logger.LogError(ex, "Error during admin device deregistration.");
                 return StatusCode(500, new { message = "Internal server error." });
             }
         }
@@ -376,7 +379,7 @@ namespace QuickCashJobAPI.Controllers
             catch (Exception ex)
             {
                 // Log the full error to console or logger
-                Console.WriteLine($"❌ Registration failed: {ex.Message} \n {ex.StackTrace}");
+                _logger.LogError(ex, "❌ Registration failed.");
 
                 return StatusCode(500, new
                 {

@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using QuickCashJobAPI.Data;
 using Microsoft.AspNetCore.Identity;
+using QuickCashJobAPI.Data;
 using QuickCashJobAPI.Models;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -15,25 +15,42 @@ using QuickCashJobAPI.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//Read DATABASE_URL environment variable ||   Production logic commented out:
+// ✅ Load secrets from environment variables
+var emailPassword = Environment.GetEnvironmentVariable("EMAIL_PASSWORD");
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+var adminEmail = Environment.GetEnvironmentVariable("COMPANY_ADMIN_EMAIL");
+var adminPassword = Environment.GetEnvironmentVariable("COMPANY_ADMIN_PASSWORD");
+var mtnApiKey = Environment.GetEnvironmentVariable("MTN_API_KEY");
+var mtnSubscriptionKey = Environment.GetEnvironmentVariable("MTN_SUBSCRIPTION_KEY");
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // ✅ Use PostgreSQL (Npgsql) when running on Railway
     var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(connectionString));
 }
 else
 {
-    // ✅ Use SQL Server locally
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 }
 
+builder.Services.Configure<EmailSettings>(options =>
+{
+    options.SmtpServer = "smtp.gmail.com";
+    options.SmtpPort = 587;
+    options.SenderEmail = adminEmail ?? string.Empty;
+    options.SenderName = "Quick Cash";
+    options.Password = emailPassword ?? string.Empty;
+    options.EnableSsl = true;
+});
 
-
+builder.Services.Configure<MTNMoMoSettings>(options =>
+{
+    options.ApiKey = mtnApiKey ?? string.Empty;
+    options.SubscriptionKey = mtnSubscriptionKey ?? string.Empty;
+});
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -41,9 +58,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.LoginPath = $"/Identity/Account/Login";
-    options.LogoutPath = $"/Identity/Account/Logout";
-    options.AccessDeniedPath = $"/Identity/Account/AccessDenied";
+    options.LoginPath = "/Identity/Account/Login";
+    options.LogoutPath = "/Identity/Account/Logout";
+    options.AccessDeniedPath = "/Identity/Account/AccessDenied";
 });
 
 builder.Services.AddAuthorization(options =>
@@ -53,9 +70,9 @@ builder.Services.AddAuthorization(options =>
             context.User.HasClaim(claim => claim.Type == "IsAdmin" && claim.Value == "True")));
 });
 
-// JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("JWT");
-var key = Encoding.ASCII.GetBytes(jwtSettings.GetValue<string>("Secret"));
+var jwtIssuer = builder.Configuration["JWT:ValidIssuer"] ?? "https://localhost:7018";
+var jwtAudience = builder.Configuration["JWT:ValidAudience"] ?? "https://localhost:7018";
+var key = Encoding.ASCII.GetBytes(jwtSecret ?? throw new Exception("JWT_SECRET not set in environment variables"));
 
 builder.Services.AddAuthentication(x =>
 {
@@ -71,8 +88,8 @@ builder.Services.AddAuthentication(x =>
         ValidateIssuer = true,
         ValidateAudience = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings.GetValue<string>("ValidIssuer"),
-        ValidAudience = jwtSettings.GetValue<string>("ValidAudience"),
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
 
@@ -80,23 +97,31 @@ builder.Services.AddAuthentication(x =>
     {
         OnAuthenticationFailed = context =>
         {
-            Console.WriteLine("OnAuthenticationFailed: " + context.Exception.Message);
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError("❌ OnAuthenticationFailed: {Message}", context.Exception.Message);
             return Task.CompletedTask;
         },
         OnTokenValidated = context =>
         {
-            Console.WriteLine("OnTokenValidated: " + context.SecurityToken);
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation("✅ Token successfully validated for user.");
             return Task.CompletedTask;
         }
+
     };
 })
-.AddCookie() // Cookie middleware for Google login
+.AddCookie()
 .AddGoogle(options =>
 {
     var googleAuthSection = builder.Configuration.GetSection("Authentication:Google");
-    options.ClientId = googleAuthSection["ClientId"];
-    options.ClientSecret = googleAuthSection["ClientSecret"];
+    options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
+    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
     options.CallbackPath = "/signin-google";
+
+    if (string.IsNullOrEmpty(options.ClientId) || string.IsNullOrEmpty(options.ClientSecret))
+    {
+        throw new Exception("Google ClientId or ClientSecret is missing. Set them as environment variables.");
+    }
 });
 
 builder.Services.AddControllers().AddNewtonsoftJson();
@@ -131,7 +156,6 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<SubscriptionCheckService>();
@@ -139,30 +163,22 @@ builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        builder =>
-        {
-            builder.AllowAnyOrigin()
-                   .AllowAnyMethod()
-                   .AllowAnyHeader();
-        });
+    options.AddPolicy("AllowAll", builder =>
+    {
+        builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+    });
 });
-
 
 // Firebase setup
 var firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "keys", "serviceAccountKey.json");
-
 FirebaseApp.Create(new AppOptions
 {
     Credential = GoogleCredential.FromFile(firebaseKeyPath)
 });
 
-
-//OMLY FOR SEVERLESS DEPLOYMEMT OM RAILWAY, remove whem you pay for a paid plam.
+// Optional: required for Railway free plan deployment
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://*:{port}");
-
-
 
 var app = builder.Build();
 
@@ -181,48 +197,51 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseCors("AllowAll");
 app.UseMiddleware<SubscriptionMiddleware>();
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-string ConvertDatabaseUrlToConnectionString(string databaseUrl)
+app.MapControllers();
+app.MapHub<NotificationHub>("/notificationHub");
+
+// ✅ Run DB migration + seeding with logging
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        context.Database.Migrate();
+
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+
+        await SeedRolesAsync(roleManager, logger);
+        await SeedSuperAdmin(userManager, roleManager, context, logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "❌ An error occurred while migrating or seeding the database.");
+    }
+}
+
+app.Run();
+
+static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
 {
     var uri = new Uri(databaseUrl);
-
     var userInfo = uri.UserInfo.Split(':');
 
     return $"Host={uri.Host};Port={uri.Port};Username={userInfo[0]};Password={userInfo[1]};Database={uri.AbsolutePath.TrimStart('/')};SSL Mode=Require;Trust Server Certificate=true";
 }
 
-//// Run migrations and seed data
-//using (var scope = app.Services.CreateScope())
-//{
-//    var services = scope.ServiceProvider;
-
-//    try
-//    {
-//        var context = services.GetRequiredService<ApplicationDbContext>();
-//        context.Database.Migrate();
-
-//        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-//        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-
-//        await SeedRolesAsync(roleManager);
-//        await SeedSuperAdmin(userManager, roleManager, context);
-//    }
-//    catch (Exception ex)
-//    {
-//        var logger = services.GetRequiredService<ILogger<Program>>();
-//        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
-//    }
-//}
-
-app.MapControllers();
-app.MapHub<NotificationHub>("/notificationHub");
-app.Run();
-
-// Seed roles
-static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
+static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager, ILogger logger)
 {
     string[] roles = { "Admin", "Customer", "Employee", "Company" };
 
@@ -231,13 +250,16 @@ static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
         if (!await roleManager.RoleExistsAsync(role))
         {
             await roleManager.CreateAsync(new IdentityRole(role));
-            Console.WriteLine($"✅ Role '{role}' created.");
+            logger.LogInformation("✅ Role '{Role}' created.", role);
         }
     }
 }
 
-//Seed super admin
-static async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext context)
+static async Task SeedSuperAdmin(
+    UserManager<ApplicationUser> userManager,
+    RoleManager<IdentityRole> roleManager,
+    ApplicationDbContext context,
+    ILogger logger)
 {
     if (!userManager.Users.Any())
     {
@@ -246,7 +268,7 @@ static async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleM
 
         if (string.IsNullOrEmpty(companyAdminEmail) || string.IsNullOrEmpty(password))
         {
-            Console.WriteLine("Super Admin email or password is missing from environment variables.");
+            logger.LogWarning("⚠️ Super Admin email or password is missing from environment variables.");
             return;
         }
 
@@ -273,14 +295,14 @@ static async Task SeedSuperAdmin(UserManager<ApplicationUser> userManager, RoleM
         if (result.Succeeded)
         {
             await userManager.AddToRoleAsync(adminUser, SD.Role_Admin);
-            Console.WriteLine("Super Admin created successfully!");
+            logger.LogInformation("✅ Super Admin created successfully.");
         }
         else
         {
-            Console.WriteLine("Failed to create Super Admin:");
+            logger.LogError("❌ Failed to create Super Admin:");
             foreach (var error in result.Errors)
             {
-                Console.WriteLine(error.Description);
+                logger.LogError("→ {Error}", error.Description);
             }
         }
     }

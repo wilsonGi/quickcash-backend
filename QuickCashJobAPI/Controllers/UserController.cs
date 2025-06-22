@@ -64,6 +64,7 @@ namespace QuickCashJobAPI.Controllers
                     user.UserRating,
                     user.PhoneNumber,
                     user.IsBlocked,
+                    user.IsDeleted,
                     user.IsApproved,
                     user.IsAdmin,
                     user.TrialEndDate,
@@ -99,6 +100,7 @@ namespace QuickCashJobAPI.Controllers
                 user.PhoneNumber,
                 user.IsBlocked,
                 user.IsApproved,
+                user.IsDeleted,
                 user.IsAdmin,
                 user.TrialEndDate,
                 user.IsSubscriptionActive,
@@ -152,14 +154,14 @@ namespace QuickCashJobAPI.Controllers
                 var user = await _userManager.FindByIdAsync(userId);
                 if (user == null)
                 {
-                    Console.WriteLine($"ApproveUser failed: No user found with ID {userId}.");
+                    _logger.LogWarning("ApproveUser failed: No user found with ID {UserId}", userId);
                     return NotFound("User not found.");
                 }
 
                 // Check if the user is already approved
                 if (user.IsApproved)
                 {
-                    Console.WriteLine($"User {user.Email} is already approved.");
+                    _logger.LogInformation("User {Email} is already approved.", user.Email);
                     return BadRequest("User is already approved.");
                 }
 
@@ -197,7 +199,8 @@ namespace QuickCashJobAPI.Controllers
 
                 if (!result.Succeeded)
                 {
-                    Console.WriteLine($"ApproveUser failed: UpdateAsync errors - {string.Join("; ", result.Errors.Select(e => e.Description))}");
+                    _logger.LogError("ApproveUser failed: UpdateAsync errors - {Errors}",
+                        string.Join("; ", result.Errors.Select(e => e.Description)));
                     return BadRequest(new { message = "Failed to approve user.", errors = result.Errors });
                 }
 
@@ -221,20 +224,19 @@ namespace QuickCashJobAPI.Controllers
                         $"To confirm your email and activate your account, please <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>click here</a>.<br><br>" +
                         $"Welcome to the Splxit Creativity Arena and Rewards System!<br><br>Thank you!");
 
-                    Console.WriteLine($"Approval email sent successfully to {user.Email}.");
+                    _logger.LogInformation("Approval email sent successfully to {Email}.", user.Email);
                 }
                 catch (Exception emailEx)
                 {
-                    Console.WriteLine($"ApproveUser warning: Failed to send approval email to {user.Email}. Error: {emailEx.Message}");
-                    // Still approve the user even if email fails
+                    _logger.LogWarning(emailEx, "ApproveUser warning: Failed to send approval email to {Email}.", user.Email);
                 }
 
-                Console.WriteLine($"User {user.Email} approved successfully.");
+                _logger.LogInformation("User {Email} approved successfully.", user.Email);
                 return Ok(new { message = "User approved successfully, and a confirmation email has been sent (if possible)." });
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Critical error in ApproveUser: {ex.Message} - {ex.StackTrace}");
+                _logger.LogCritical(ex, "Critical error in ApproveUser for userId: {UserId}", userId);
                 return StatusCode(500, new { message = $"Unexpected error: {ex.Message}", stackTrace = ex.StackTrace });
             }
         }
@@ -406,7 +408,7 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-        //Mamual Subscriptiom Remewal With Buttom Click
+        //Mamual Subscriptiom Remewal With Buttom Click Works Perfectly
         [HttpPost("renew-subscription/{userId}")]
         public async Task<IActionResult> RenewSubscription(string userId) // Change int to string
         {
