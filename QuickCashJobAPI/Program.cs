@@ -263,8 +263,8 @@ static async Task SeedSuperAdmin(
 {
     if (!userManager.Users.Any())
     {
-        var companyAdminEmail = Environment.GetEnvironmentVariable("COMPANY_ADMIN_EMAIL");
-        var password = Environment.GetEnvironmentVariable("COMPANY_ADMIN_PASSWORD");
+        var companyAdminEmail = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_EMAIL");
+        var password = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_PASSWORD");
 
         if (string.IsNullOrEmpty(companyAdminEmail) || string.IsNullOrEmpty(password))
         {
@@ -307,3 +307,4 @@ static async Task SeedSuperAdmin(
         }
     }
 }
+    
