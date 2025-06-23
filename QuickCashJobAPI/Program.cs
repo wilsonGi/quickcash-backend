@@ -113,16 +113,17 @@ builder.Services.AddAuthentication(x =>
 .AddCookie()
 .AddGoogle(options =>
 {
-    var googleAuthSection = builder.Configuration.GetSection("Authentication:Google");
     options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
     options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
     options.CallbackPath = "/signin-google";
 
+    // Optional: log warning instead of crashing if in development
     if (string.IsNullOrEmpty(options.ClientId) || string.IsNullOrEmpty(options.ClientSecret))
     {
         throw new Exception("Google ClientId or ClientSecret is missing. Set them as environment variables.");
     }
 });
+
 
 builder.Services.AddControllers().AddNewtonsoftJson();
 builder.Services.AddEndpointsApiExplorer();
