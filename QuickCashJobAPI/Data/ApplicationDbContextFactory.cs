@@ -24,9 +24,12 @@ namespace QuickCashJobAPI.Data
             }
             else
             {
-                // SQL Server (for Local Development)
                 var connectionString = configuration.GetConnectionString("DefaultConnection");
-                optionsBuilder.UseSqlServer(connectionString);
+                optionsBuilder.UseNpgsql(connectionString); // ✅ Use Npgsql
+
+                //// SQL Server (for Local Development)
+                //var connectionString = configuration.GetConnectionString("DefaultConnection");
+                //optionsBuilder.UseSqlServer(connectionString);
             }
 
             return new ApplicationDbContext(optionsBuilder.Options);
