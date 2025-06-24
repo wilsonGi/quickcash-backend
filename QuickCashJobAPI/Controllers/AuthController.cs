@@ -151,8 +151,7 @@ namespace QuickCashJobAPI.Controllers
                 }
 
                 // Assign role
-                //var role = registerModel.IsAdmin ? "Admin" : "Customer";
-                var role = "Admin";
+                var role = registerModel.IsAdmin ? "Admin" : "Customer";
                 await _userManager.AddToRoleAsync(user, role);
 
                 // Send email and return status
