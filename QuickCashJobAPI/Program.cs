@@ -242,6 +242,8 @@ app.Run();
 
 static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
 {
+    Console.WriteLine($"Using DATABASE_URL: {databaseUrl}");
+
     var uri = new Uri(databaseUrl);
     var userInfo = uri.UserInfo.Split(':');
 

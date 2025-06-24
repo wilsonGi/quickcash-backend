@@ -207,8 +207,12 @@ namespace QuickCashJobAPI.Data
     new Skill { Id = 100, Name = "Voice-over Acting" }
 );
 
+            modelBuilder.Entity<ApplicationUser>(entity =>
+            {
+                entity.Property(e => e.FcmToken).HasMaxLength(255);
+                //entity.Property(e => e.DeviceId).HasMaxLength(255);
+            });
 
-           
 
             //Configure the Payout property
             modelBuilder.Entity<Job>()
