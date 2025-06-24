@@ -169,9 +169,7 @@ namespace QuickCashJobAPI.Areas.Identity.Pages.Account
                     {
                         _logger.LogInformation("User created a new account with password.");
                     // Assign the role, defaulting to "Customer" if no role is provided
-                    //string role = string.IsNullOrEmpty(Input.Role) ? SD.Role_Customer : Input.Role;
-                    string role = string.IsNullOrEmpty(Input.Role) ? SD.Role_Admin : Input.Role;
-
+                    string role = string.IsNullOrEmpty(Input.Role) ? SD.Role_Customer : Input.Role;
                     await _userManager.AddToRoleAsync(user, role);
 
 
