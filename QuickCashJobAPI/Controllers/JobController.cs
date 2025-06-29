@@ -635,7 +635,12 @@ namespace QuickCashJobAPI.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> CommitToJob(int id)
         {
-            var job = await _db.Jobs.FindAsync(id);
+            //var job = await _db.Jobs.FindAsync(id);
+            var job = await _db.Jobs
+            .Include(j => j.User) // <== important!
+            .FirstOrDefaultAsync(j => j.Id == id);
+
+
             if (job == null)
             {
                 return NotFound(new { message = "Job not found." });
@@ -693,7 +698,8 @@ namespace QuickCashJobAPI.Controllers
 
 
             // ✅ Notify job owner (creator) via both FCM and SignalR
-            if (!string.IsNullOrWhiteSpace(job.User?.FcmToken))
+            //if (!string.IsNullOrWhiteSpace(job.User?.FcmToken))
+            if (job.User != null && !string.IsNullOrWhiteSpace(job.User.FcmToken))
             {
                 await _notificationService.SendCombinedNotificationAsync(
                     job.User.Id,
