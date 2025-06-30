@@ -51,6 +51,9 @@ namespace QuickCashJobAPI.Models
         public string? DeviceId { get; set; }
         public string? FcmToken { get; set; }
 
+        public string RefreshToken { get; set; }
+        public DateTime RefreshTokenExpiryTime { get; set; }
+
 
 
 

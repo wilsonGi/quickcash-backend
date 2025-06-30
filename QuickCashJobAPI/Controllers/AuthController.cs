@@ -14,6 +14,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace QuickCashJobAPI.Controllers
@@ -65,12 +66,16 @@ namespace QuickCashJobAPI.Controllers
                     return Unauthorized(new { message = "Your account has not been approved yet. Please wait for admin approval." });
                 }
 
-
+                var refreshToken = GenerateRefreshToken();
+                user.RefreshToken = refreshToken;
+                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // or 30 days
                 var token = GenerateJwtToken(user, isAdmin, isSubscriptionActive, isApproved);
                 return Ok(new
                 {
                     UserId = user.Id,
                     Token = token,
+                    RefreshToken = refreshToken,
+                    RefreshTokenExpiry = user.RefreshTokenExpiryTime,
                     UserName = user.Name,
                     UserEmail = user.Email,
                     IsAdmin = isAdmin, // Include admin flag in the response
@@ -82,6 +87,72 @@ namespace QuickCashJobAPI.Controllers
 
             return Unauthorized(new { message = "Invalid email or password." });
         }
+
+
+        private string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomNumber);
+                return Convert.ToBase64String(randomNumber);
+            }
+        }
+
+
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] TokenApiModel tokenModel)
+        {
+            if (tokenModel is null)
+                return BadRequest("Invalid client request");
+
+            var principal = GetPrincipalFromExpiredToken(tokenModel.AccessToken);
+            var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.RefreshToken != tokenModel.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            {
+                return Unauthorized("Invalid refresh token or expired.");
+            }
+
+            var newAccessToken = GenerateJwtToken(user, user.IsAdmin, user.TrialEndDate > DateTime.UtcNow, user.IsApproved);
+            var newRefreshToken = GenerateRefreshToken();
+
+            user.RefreshToken = newRefreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken
+            });
+        }
+
+
+        private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
+        {
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateAudience = true,
+                ValidateIssuer = true,
+                ValidateIssuerSigningKey = true,
+                ValidateLifetime = false, // Ignore expiration
+                ValidIssuer = _configuration["JWT:ValidIssuer"],
+                ValidAudience = _configuration["JWT:ValidAudience"],
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]))
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
+
+            if (securityToken is not JwtSecurityToken jwtSecurityToken)
+                throw new SecurityTokenException("Invalid token");
+
+            return principal;
+        }
+
+
 
         // User Registration Endpoint
         [HttpPost("register")]
