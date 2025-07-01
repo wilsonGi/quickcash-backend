@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using QuickCashJobAPI.Models;
 using QuickCashJobAPI.Models.DTO;
 using System.Buffers.Text;
@@ -276,6 +277,29 @@ namespace QuickCashJobAPI.Data
                 .HasConversion(
                     v => v,
                     v => v == null ? null : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc));
+
+            // Apply UTC kind conversion for all DateTime properties
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entityType.GetProperties())
+                {
+                    if (property.ClrType == typeof(DateTime))
+                    {
+                        property.SetValueConverter(new ValueConverter<DateTime, DateTime>(
+                            v => DateTime.SpecifyKind(v, DateTimeKind.Utc),
+                            v => DateTime.SpecifyKind(v, DateTimeKind.Utc)
+                        ));
+                    }
+
+                    if (property.ClrType == typeof(DateTime?))
+                    {
+                        property.SetValueConverter(new ValueConverter<DateTime?, DateTime?>(
+                            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v,
+                            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v
+                        ));
+                    }
+                }
+            }
         }
     }
 }
