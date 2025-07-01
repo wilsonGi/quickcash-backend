@@ -287,6 +287,118 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
+        [HttpPost("BlockUser/{userId}")]
+        public async Task<IActionResult> BlockUser(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound("User not found.");
+
+            // Ensure critical date fields are in UTC
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+            user.DateJoined = user.DateJoined == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
+            user.TrialEndDate = user.TrialEndDate == default
+                ? DateTime.UtcNow.AddDays(14) // example fallback
+                : DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
+
+            user.IsBlocked = true;
+            user.IsSubscriptionActive = false;
+            user.LockoutEnd = DateTimeOffset.MaxValue;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                return BadRequest("Failed to block user.");
+            }
+
+            await _emailSender.SendEmailAsync(user.Email, "Your account has been blocked",
+                $"Dear {user.UserName},<br><br>Your account has been blocked by the administrator due to policy violations or suspicious activities.<br>" +
+                $"Please contact support for more details.<br><br>Thank you.");
+
+            return Ok("User has been successfully blocked and notified via email.");
+        }
+
+        [HttpPost("UnblockUser/{userId}")]
+        public async Task<IActionResult> UnblockUser(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound("User not found.");
+
+            // Ensure critical date fields are in UTC
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+            user.DateJoined = user.DateJoined == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
+            user.TrialEndDate = user.TrialEndDate == default
+                ? DateTime.UtcNow.AddDays(14)
+                : DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
+
+            user.IsBlocked = false;
+            user.LockoutEnd = null;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                return BadRequest("Failed to unblock user.");
+            }
+
+            await _emailSender.SendEmailAsync(user.Email, "Your account has been unblocked",
+                $"Dear {user.UserName},<br><br>Your account has been unblocked by the administrator so your access to activities have been restored.<br>" +
+                $"Please enjoy your usage.<br><br>Thank you.");
+
+            return Ok("User has been successfully unblocked and notified via email.");
+        }
+
+        [HttpDelete("DeleteUser/{userId}")]
+        public async Task<IActionResult> DeleteUser(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound("User not found.");
+
+            // Ensure critical date fields are in UTC
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
+
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
+
+            user.DateJoined = user.DateJoined == default
+                ? DateTime.UtcNow
+                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
+
+            user.TrialEndDate = user.TrialEndDate == default
+                ? DateTime.UtcNow.AddDays(14)
+                : DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
+
+            user.IsDeleted = true;
+            user.IsSubscriptionActive = false;
+
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+
+            return Ok("User soft-deleted successfully.");
+        }
+
+
 
         //[HttpPost("BlockUser/{userId}")]
         //public async Task<IActionResult> BlockUser(string userId)
@@ -530,6 +642,7 @@ namespace QuickCashJobAPI.Controllers
 
 
         //Mamual Subscriptiom Remewal With Buttom Click Works Perfectly
+
         [HttpPost("renew-subscription/{userId}")]
         public async Task<IActionResult> RenewSubscription(string userId) // Change int to string
         {
