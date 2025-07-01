@@ -69,6 +69,7 @@ namespace QuickCashJobAPI.Controllers
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // or 30 days
+                await _userManager.UpdateAsync(user);
                 var token = GenerateJwtToken(user, isAdmin, isSubscriptionActive, isApproved);
                 return Ok(new
                 {
