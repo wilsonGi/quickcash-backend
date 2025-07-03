@@ -296,17 +296,15 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto model)
         {
             var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
-
-            // Check if user exists
             var user = await _userManager.FindByEmailAsync(payload.Email);
+
             if (user == null)
             {
-                // Register new user
+                // Register user but do NOT auto-approve
                 user = new ApplicationUser
                 {
                     Email = payload.Email,
@@ -318,19 +316,53 @@ namespace QuickCashJobAPI.Controllers
                     LastTaskDoneDate = DateTime.UtcNow,
                     LastTaskEmployedDate = DateTime.UtcNow,
                     TrialEndDate = DateTime.UtcNow.AddDays(7),
-                    IsSubscriptionActive = true,
-                    IsApproved = true
+                    IsSubscriptionActive = true, // ✅ Required
+                    IsApproved = false,          // ✅ Required
+                    IsAdmin = false
                 };
 
                 var result = await _userManager.CreateAsync(user);
                 if (!result.Succeeded)
                     return BadRequest(result.Errors);
+
+                // Optional: Send "pending approval" email
+                await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
+                    $"Dear {user.Name},<br><br>Your Google sign-in is successful,<br><strong>Email:</strong> {user.Email}<br>Please wait for approval to get full access. Thank you.");
+
+                return Ok(new { message = "User registered successfully via Google, pending admin approval." });
             }
+
+            // If user exists but is not approved
+            if (!user.IsApproved)
+            {
+                return Unauthorized(new { message = "Your account is pending approval by an admin." });
+            }
+
+            // Refresh token setup
+            var refreshToken = GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            await _userManager.UpdateAsync(user);
 
             // Generate JWT
             var token = GenerateJwtToken(user, user.IsAdmin, user.IsSubscriptionActive, user.IsApproved);
-            return Ok(token);
+
+            // Return consistent structure
+            return Ok(new
+            {
+                UserId = user.Id,
+                Token = token,
+                RefreshToken = refreshToken,
+                RefreshTokenExpiry = user.RefreshTokenExpiryTime,
+                UserName = user.Name,
+                UserEmail = user.Email,
+                IsAdmin = user.IsAdmin,
+                IsSubscriptionActive = user.IsSubscriptionActive,
+                IsApproved = user.IsApproved
+            });
+
         }
+
 
 
         public class DeregisterRequest
