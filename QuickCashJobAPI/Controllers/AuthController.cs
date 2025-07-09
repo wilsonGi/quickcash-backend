@@ -295,7 +295,6 @@ namespace QuickCashJobAPI.Controllers
             return Ok(user);
         }
 
-
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto model)
         {
@@ -304,7 +303,6 @@ namespace QuickCashJobAPI.Controllers
 
             if (user == null)
             {
-                // Register user but do NOT auto-approve
                 user = new ApplicationUser
                 {
                     Email = payload.Email,
@@ -316,8 +314,8 @@ namespace QuickCashJobAPI.Controllers
                     LastTaskDoneDate = DateTime.UtcNow,
                     LastTaskEmployedDate = DateTime.UtcNow,
                     TrialEndDate = DateTime.UtcNow.AddDays(7),
-                    IsSubscriptionActive = true, // ✅ Required
-                    IsApproved = false,          // ✅ Required
+                    IsSubscriptionActive = true,
+                    IsApproved = false,
                     IsAdmin = false
                 };
 
@@ -325,44 +323,47 @@ namespace QuickCashJobAPI.Controllers
                 if (!result.Succeeded)
                     return BadRequest(result.Errors);
 
-                // Optional: Send "pending approval" email
                 await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
                     $"Dear {user.Name},<br><br>Your Google sign-in is successful,<br><strong>Email:</strong> {user.Email}<br>Please wait for approval to get full access. Thank you.");
 
-                return Ok(new { message = "User registered successfully via Google, pending admin approval." });
+                return Ok(new
+                {
+                    message = "User registered successfully via Google, pending admin approval.",
+                    isApproved = false,
+                    isAdmin = user.IsAdmin,
+                    isSubscriptionActive = user.IsSubscriptionActive,
+                    userId = user.Id,
+                    userName = user.Name,
+                    userEmail = user.Email
+                });
             }
 
-            // If user exists but is not approved
             if (!user.IsApproved)
             {
                 return Unauthorized(new { message = "Your account is pending approval by an admin." });
             }
 
-            // Refresh token setup
+            // Generate Refresh Token
             var refreshToken = GenerateRefreshToken();
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await _userManager.UpdateAsync(user);
 
-            // Generate JWT
             var token = GenerateJwtToken(user, user.IsAdmin, user.IsSubscriptionActive, user.IsApproved);
 
-            // Return consistent structure
             return Ok(new
             {
-                UserId = user.Id,
-                Token = token,
-                RefreshToken = refreshToken,
-                RefreshTokenExpiry = user.RefreshTokenExpiryTime,
-                UserName = user.Name,
-                UserEmail = user.Email,
-                IsAdmin = user.IsAdmin,
-                IsSubscriptionActive = user.IsSubscriptionActive,
-                IsApproved = user.IsApproved
+                token,
+                refreshToken,
+                refreshTokenExpiry = user.RefreshTokenExpiryTime,
+                userId = user.Id,
+                userName = user.Name,
+                userEmail = user.Email,
+                isAdmin = user.IsAdmin,
+                isApproved = user.IsApproved,
+                isSubscriptionActive = user.IsSubscriptionActive
             });
-
         }
-
 
 
         public class DeregisterRequest
