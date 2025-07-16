@@ -205,7 +205,7 @@ namespace QuickCashJobAPI.Controllers
                     DateJoined = DateTime.SpecifyKind(registerModel.DateJoined, DateTimeKind.Utc),
                     PhoneNumber = registerModel.PhoneNumber,
                     IsAdmin = false,
-                    TrialEndDate = DateTime.UtcNow.AddDays(30),
+                    TrialEndDate = DateTime.UtcNow.AddDays(7),
                     DeviceId = registerModel.DeviceId
                 };
 
