@@ -96,7 +96,9 @@ namespace QuickCashJobAPI.Controllers
                     CategoryName = job.Category.CategoryName,
                     Description = job.Description,
                     Location = job.Location,
-                    Status = job.Status,
+                    Status = (job.Status == JobStatus.Active && job.DatePosted.AddDays(7) < DateTime.UtcNow)
+                    ? JobStatus.Inactive
+                    : job.Status,
                     DatePosted = job.DatePosted,
                     AudioDescription = job.AudioDescription,
                     Payout = job.Payout,
@@ -113,6 +115,10 @@ namespace QuickCashJobAPI.Controllers
 
             return Ok(jobs);
         }
+
+
+
+
 
 
 
@@ -285,7 +291,9 @@ namespace QuickCashJobAPI.Controllers
                     CategoryName = job.Category.CategoryName,
                     Description = job.Description,
                     Location = job.Location,
-                    Status = job.Status,
+                    Status = (job.Status == JobStatus.Active && job.DatePosted.AddDays(7) < DateTime.UtcNow)
+                    ? JobStatus.Inactive
+                    : job.Status,
                     DatePosted = job.DatePosted,
                     AudioDescription = job.AudioDescription,
                     Payout = job.Payout,
@@ -304,103 +312,28 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
+        [Authorize]
+        [HttpPost("{id}/activate")]
+        public async Task<IActionResult> ActivateJob(int id)
+        {
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null) return Unauthorized();
 
-        //[Authorize]
-        //[HttpGet("{id:int}", Name = "GetJob")]
-        //[ProducesResponseType(StatusCodes.Status200OK)]
-        //[ProducesResponseType(StatusCodes.Status400BadRequest)]
-        //[ProducesResponseType(StatusCodes.Status404NotFound)]
-        //public ActionResult<JobDTO> GetJob(int id)
-        //{
-        //    if (id == 0)
-        //    {
-        //        return BadRequest();
-        //    }
+            var job = await _db.Jobs.FindAsync(id);
+            if (job == null) return NotFound();
 
-        //    var user = GetCurrentUser();
-        //    if (!user.IsApproved || user.IsBlocked)
-        //    {
-        //        return Forbid("Your account is not approved or is blocked.");
-        //    }
+            // Only the owner can reactivate
+            if (job.UserId != currentUser.Id) return Forbid();
 
-        //    var job = _db.Jobs.Select(job => new JobDTO
-        //    {
-        //        Id = job.Id,
-        //        CategoryId = job.CategoryId,
-        //        CategoryName = job.Category.CategoryName,
-        //        Description = job.Description,
-        //        Location = job.Location,
-        //        Status = job.Status,
-        //        DatePosted = job.DatePosted,
-        //        AudioDescription = job.AudioDescription,
-        //        Payout = job.Payout,
-        //        Negotiable = job.Negotiable,
-        //        UserName = job.UserName,
-        //        NumberOfTasksCompleted = job.NumberOfTasksCompleted,
-        //        NumberOfTasksEmployed = job.NumberOfTasksEmployed,
-        //        UserLastTaskDoneDate = job.UserLastTaskDoneDate,
-        //        UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
-        //        UserRating = job.UserRating,
-        //        UserPhoneNumber = job.UserPhoneNumber,
-        //        ShowContact = job.ShowContact,
-        //    }).FirstOrDefault(u => u.Id == id);
+            job.Status = JobStatus.Active;        // or "Active" if you store as string
+            job.DatePosted = DateTime.UtcNow;     // reset 7-day countdown
+            await _db.SaveChangesAsync();
 
-        //    if (job == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    // Get the UserId separately
-        //    var jobOwnerId = _db.Jobs.Where(j => j.Id == id).Select(j => j.UserId).FirstOrDefault();
-
-        //    var currentUser = GetCurrentUser();
-        //    if (currentUser == null || jobOwnerId != currentUser.Id)
-        //    {
-        //        return Unauthorized();
-        //    }
-
-        //    return Ok(job);
-        //}
+            return Ok(new { message = "Job reactivated successfully" });
+        }
 
 
-        //[Authorize]
-        //[HttpGet("all")]
-        //[ProducesResponseType(StatusCodes.Status200OK)]
-        //public ActionResult<IEnumerable<JobDTO>> GetAllJobs()
-        //{
-        //    var user = GetCurrentUser();
-        //    if (user == null)
-        //        return Unauthorized();
 
-        //    if (!user.IsApproved || user.IsBlocked)
-        //        return Forbid("Your account is not approved or is blocked.");
-
-        //    var jobs = _db.Jobs
-        //        .Select(job => new JobDTO
-        //        {
-        //            Id = job.Id,
-        //            CategoryId = job.CategoryId,
-        //            CategoryName = job.Category.CategoryName,
-        //            Description = job.Description,
-        //            Location = job.Location,
-        //            Status = job.Status,
-        //            DatePosted = DateTime.SpecifyKind(job.DatePosted, DateTimeKind.Utc),
-        //            AudioDescription = job.AudioDescription,
-        //            Payout = job.Payout,
-        //            Negotiable = job.Negotiable,
-        //            UserName = job.UserName,
-        //            NumberOfTasksCompleted = job.NumberOfTasksCompleted,
-        //            NumberOfTasksEmployed = job.NumberOfTasksEmployed,
-        //            UserLastTaskDoneDate = job.UserLastTaskDoneDate,
-        //            UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
-        //            UserRating = job.UserRating,
-        //            UserPhoneNumber = job.UserPhoneNumber,
-        //            ShowContact = job.ShowContact,
-        //        }).ToList();
-
-
-        //    return Ok(jobs);
-        //}
 
 
         [Authorize]
@@ -429,7 +362,9 @@ namespace QuickCashJobAPI.Controllers
                     CategoryName = job.Category.CategoryName,
                     Description = job.Description,
                     Location = job.Location,
-                    Status = job.Status,
+                    Status = (job.Status == JobStatus.Active && job.DatePosted.AddDays(7) < DateTime.UtcNow)
+                    ? JobStatus.Inactive
+                    : job.Status,
                     DatePosted = job.DatePosted,
                     AudioDescription = job.AudioDescription,
                     Payout = job.Payout,
@@ -485,7 +420,9 @@ namespace QuickCashJobAPI.Controllers
                     CategoryName = job.Category.CategoryName,
                     Description = job.Description,
                     Location = job.Location,
-                    Status = job.Status,
+                    Status = (job.Status == JobStatus.Active && job.DatePosted.AddDays(7) < DateTime.UtcNow)
+                    ? JobStatus.Inactive
+                    : job.Status,
                     DatePosted = DateTime.SpecifyKind(job.DatePosted, DateTimeKind.Utc),
                     AudioDescription = job.AudioDescription,
                     Payout = job.Payout,
