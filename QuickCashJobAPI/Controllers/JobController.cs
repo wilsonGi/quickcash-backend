@@ -291,9 +291,11 @@ namespace QuickCashJobAPI.Controllers
                     CategoryName = job.Category.CategoryName,
                     Description = job.Description,
                     Location = job.Location,
-                    Status = (job.Status == JobStatus.Active && job.DatePosted.AddDays(7) < DateTime.UtcNow)
+                    Status = ((job.Status == JobStatus.Active || job.Status == JobStatus.Committed)
+                    && job.DatePosted.AddDays(7) < DateTime.UtcNow)
                     ? JobStatus.Inactive
                     : job.Status,
+
                     DatePosted = job.DatePosted,
                     AudioDescription = job.AudioDescription,
                     Payout = job.Payout,
