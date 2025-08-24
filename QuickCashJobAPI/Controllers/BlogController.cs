@@ -26,7 +26,7 @@ namespace QuickCashJobAPI.Controllers
                     b.Id,
                     b.Title,
                     b.Content,
-                    ImageBase64 = b.ImageUrl != null ? Convert.ToBase64String(b.ImageUrl) : null,
+                    //ImageBase64 = b.ImageUrl != null ? Convert.ToBase64String(b.ImageUrl) : null,
                     b.CreatedAt,
                     b.UpdatedAt
                 })
