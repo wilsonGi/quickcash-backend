@@ -2,14 +2,16 @@
 {
     public class AdvertisementDTO
     {
+        // Advertisement fields
         public int Id { get; set; }
-        public string Category { get; set; }
-        public string Name { get; set; }
-        public string Description { get; set; }
-        public string Area { get; set; }
-        public string Contact { get; set; }
-        public bool IsSubscriptionActive { get; set; }
-      
-    }
 
+        public string Category { get; set; } = null!;
+        public string Name { get; set; } = null!;
+        public string Description { get; set; } = null!;
+
+        public bool IsSubscriptionActive { get; set; }
+
+        // 👤 Nested User
+        public AdUserDTO? User { get; set; }
+    }
 }

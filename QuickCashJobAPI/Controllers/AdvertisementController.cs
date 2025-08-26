@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using QuickCashJobAPI.Data;
 using QuickCashJobAPI.Models;
 using QuickCashJobAPI.Models.DTO;
-using QuickCashJobAPI.Services; // Import SD
+using QuickCashJobAPI.Services; // SD
 using System.Security.Claims;
 
 namespace QuickCashJobAPI.Controllers
 {
-    [Route("api/ads")]
+    [Route("api/[controller]")]
     [ApiController]
     public class AdvertisementController : ControllerBase
     {
@@ -17,47 +17,67 @@ namespace QuickCashJobAPI.Controllers
 
         public AdvertisementController(ApplicationDbContext db) => _db = db;
 
-
-        private async Task<ApplicationUser> GetCurrentUserAsync()
+        // ✅ Only load what ApplicationUser really has
+        private async Task<ApplicationUser?> GetCurrentUserAsync()
         {
-            var userClaims = HttpContext.User.Identity as ClaimsIdentity;
-            if (userClaims == null) return null;
-
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)) return null;
 
-            return await _db.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
+            return await _db.ApplicationUsers
+                .Include(u => u.UserSkills)
+                    .ThenInclude(us => us.Skill)
+                .FirstOrDefaultAsync(u => u.Id == userId);
         }
 
-
+        // ✅ GET all ads
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
             var ads = await _db.Advertisements
-                .Include(a => a.User)
-                .Where(a =>
-                    a.IsSubscriptionActive &&
-                    a.User != null &&
-                    a.User.IsApproved &&
-                    a.User.IsSubscriptionActive &&
-                    !a.User.IsDeleted)
-                .Select(a => new AdvertisementDTO
-                {
-                    Id = a.Id,
-                    Category = a.Category,
-                    Name = a.Name,
-                    Description = a.Description,
-                    Area = a.Area,
-                    Contact = a.Contact,
-                    IsSubscriptionActive = a.IsSubscriptionActive,
-                })
-                .ToListAsync();
+     .Include(a => a.User)
+     .Where(a => a.IsSubscriptionActive &&
+                 a.User != null &&
+                 a.User.IsApproved &&
+                 a.User.IsSubscriptionActive &&
+                 !a.User.IsDeleted)
+     .Select(a => new AdvertisementDTO
+     {
+         Id = a.Id,
+         Category = a.Category,
+         Name = a.Name,
+         Description = a.Description,
+         IsSubscriptionActive = a.IsSubscriptionActive,
+         User = new AdUserDTO
+         {
+             Id = a.User.Id,
+             Name = a.User.Name,
+             Location = a.User.Location,
+             PhoneNumber = a.User.PhoneNumber,
+             ProfilePhoto = a.User.ProfilePhoto != null
+                 ? Convert.ToBase64String(a.User.ProfilePhoto)
+                 : null,
+             NumberOfTasksCompleted = a.User.NumberOfTasksCompleted,
+             NumberOfTasksEmployed = a.User.NumberOfTasksEmployed,
+             LastTaskDoneDate = a.User.LastTaskDoneDate == default ? null : a.User.LastTaskDoneDate,
+             LastTaskEmployedDate = a.User.LastTaskEmployedDate == default ? null : a.User.LastTaskEmployedDate,
+             UserRating = a.User.UserRating,
+             Skills = _db.UserSkills.Where(us => us.UserId == a.User.Id).Select(us => us.Skill.Name).ToList(),
+             CompletedCategories = _db.UserCompletedCategories.Where(uc => uc.UserId == a.User.Id).Select(uc => uc.Category.CategoryName).ToList(),
+             EmployedCategories = _db.Jobs.Where(j => j.UserId == a.User.Id).Select(j => j.Category.CategoryName).Distinct().ToList()
+         }
+     })
+     .ToListAsync();
+
+            Console.WriteLine("🔥 [GetAll] AdvertisementController hit!");
+
 
             return Ok(ads);
         }
 
 
-        // POST: api/Advertisement
+
+
+        // ✅ POST: create ad
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> Create([FromBody] AdvertisementDTO model)
@@ -65,9 +85,16 @@ namespace QuickCashJobAPI.Controllers
             var user = await GetCurrentUserAsync();
             if (user == null) return Unauthorized();
 
+            // ✅ Add this check right after getting the user
+            if (string.IsNullOrWhiteSpace(user.Location) || string.IsNullOrWhiteSpace(user.PhoneNumber))
+            {
+                return BadRequest("Your profile must include Location and Phone Number to post an ad.");
+            }
+
+
             if (!user.IsApproved || !user.IsSubscriptionActive || user.IsDeleted)
             {
-                return Forbid("Only approved, active, and non-deleted users can create ads.");
+                return BadRequest("Only approved, active, and non-deleted users can create ads.");
             }
 
             var ad = new Advertisement
@@ -75,8 +102,8 @@ namespace QuickCashJobAPI.Controllers
                 Category = model.Category,
                 Name = string.IsNullOrWhiteSpace(model.Name) ? user.Name : model.Name,
                 Description = model.Description,
-                Area = model.Area,
-                Contact = model.Contact,
+                Area = user.Location,
+                Contact = user.PhoneNumber,
                 IsSubscriptionActive = true,
                 UserId = user.Id
             };
@@ -84,17 +111,58 @@ namespace QuickCashJobAPI.Controllers
             _db.Advertisements.Add(ad);
             await _db.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetAll), new { id = ad.Id }, new AdvertisementDTO
+            // ✅ Explicit queries for categories
+            var completedCategories = await _db.UserCompletedCategories
+                .Where(c => c.UserId == user.Id)
+                .Include(c => c.Category)
+                .Select(c => c.Category.CategoryName)
+                .ToListAsync();
+
+            var employedCategories = await _db.Jobs
+                .Where(j => j.UserId == user.Id)
+                .Select(j => j.Category.CategoryName)
+                .Distinct()
+                .ToListAsync();
+
+            var skills = await _db.UserSkills
+                .Where(us => us.UserId == user.Id)
+                .Select(us => us.Skill.Name)
+                .ToListAsync();
+
+            // ✅ Return same shape as GET
+            var dto = new AdvertisementDTO
             {
                 Id = ad.Id,
                 Category = ad.Category,
                 Name = ad.Name,
                 Description = ad.Description,
-                Area = ad.Area,
-                Contact = ad.Contact,
+         
                 IsSubscriptionActive = ad.IsSubscriptionActive,
-            });
+
+                User = new AdUserDTO
+                {
+                    Id = user.Id,
+                    Name = user.Name,
+                    Location = user.Location,
+                    PhoneNumber = user.PhoneNumber,
+                    ProfilePhoto = user.ProfilePhoto != null
+                        ? Convert.ToBase64String(user.ProfilePhoto)
+                        : null,
+                    NumberOfTasksCompleted = user.NumberOfTasksCompleted,
+                    NumberOfTasksEmployed = user.NumberOfTasksEmployed,
+                    LastTaskDoneDate = user.LastTaskDoneDate == default(DateTime) ? null : user.LastTaskDoneDate,
+                    LastTaskEmployedDate = user.LastTaskEmployedDate == default(DateTime) ? null : user.LastTaskEmployedDate,
+                    UserRating = user.UserRating,
+                    Skills = skills,
+                    CompletedCategories = completedCategories,
+                    EmployedCategories = employedCategories
+                }
+            };
+
+            return Ok(dto);
         }
+
+
 
 
 
