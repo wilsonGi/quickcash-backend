@@ -508,6 +508,49 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest model)
+        {
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
+            {
+                // Do not reveal that the user does not exist or is not confirmed
+                return Ok(new { message = "If an account exists for this email, a password reset link has been sent." });
+            }
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+            var callbackUrl = $"{model.ClientAppUrl}?token={encodedToken}&email={user.Email}";
+
+            await _emailSender.SendEmailAsync(
+                user.Email,
+                "Reset Your Password",
+                $"Please reset your password by clicking <a href='{callbackUrl}'>here</a>.<br><br>" +
+                $"This link will expire soon. If you did not request this, ignore this email.");
+
+            return Ok(new { message = "If an account exists for this email, a password reset link has been sent." });
+        }
+
+
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest model)
+        {
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            if (user == null)
+                return BadRequest(new { message = "Invalid request." });
+
+            var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(model.Token));
+            var result = await _userManager.ResetPasswordAsync(user, decodedToken, model.NewPassword);
+
+            if (!result.Succeeded)
+                return BadRequest(new { message = "Failed to reset password.", errors = result.Errors });
+
+            return Ok(new { message = "Password has been reset successfully." });
+        }
+
+
+
         [Authorize]
         [HttpGet("user")]
         public async Task<IActionResult> GetMyNotifications()
