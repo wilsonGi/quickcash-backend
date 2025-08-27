@@ -163,6 +163,26 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
+        [HttpPut("{id}")]
+        [Authorize]
+        public async Task<IActionResult> Update(int id, [FromBody] AdvertisementDTO model)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            var ad = await _db.Advertisements.FirstOrDefaultAsync(a => a.Id == id && a.UserId == user.Id);
+            if (ad == null) return NotFound("Advertisement not found or not yours.");
+
+            ad.Category = model.Category;
+            ad.Name = string.IsNullOrWhiteSpace(model.Name) ? user.Name : model.Name;
+            ad.Description = model.Description;
+            ad.Area = user.Location;
+            ad.Contact = user.PhoneNumber;
+
+            await _db.SaveChangesAsync();
+
+            return NoContent();
+        }
 
 
 
