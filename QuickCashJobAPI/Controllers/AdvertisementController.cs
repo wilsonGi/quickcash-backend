@@ -75,6 +75,46 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
+        [HttpGet("my")]
+        [Authorize]
+        public async Task<IActionResult> GetMyAds()
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            var ads = await _db.Advertisements
+                .Where(a => a.UserId == user.Id)
+                .Select(a => new AdvertisementDTO
+                {
+                    Id = a.Id,
+                    Category = a.Category,
+                    Name = a.Name,
+                    Description = a.Description,
+                    IsSubscriptionActive = a.IsSubscriptionActive,
+                    User = new AdUserDTO
+                    {
+                        Id = user.Id,
+                        Name = user.Name,
+                        Location = user.Location,
+                        PhoneNumber = user.PhoneNumber,
+                        ProfilePhoto = user.ProfilePhoto != null
+                            ? Convert.ToBase64String(user.ProfilePhoto)
+                            : null,
+                        NumberOfTasksCompleted = user.NumberOfTasksCompleted,
+                        NumberOfTasksEmployed = user.NumberOfTasksEmployed,
+                        LastTaskDoneDate = user.LastTaskDoneDate == default ? null : user.LastTaskDoneDate,
+                        LastTaskEmployedDate = user.LastTaskEmployedDate == default ? null : user.LastTaskEmployedDate,
+                        UserRating = user.UserRating,
+                        Skills = _db.UserSkills.Where(us => us.UserId == user.Id).Select(us => us.Skill.Name).ToList(),
+                        CompletedCategories = _db.UserCompletedCategories.Where(uc => uc.UserId == user.Id).Select(uc => uc.Category.CategoryName).ToList(),
+                        EmployedCategories = _db.Jobs.Where(j => j.UserId == user.Id).Select(j => j.Category.CategoryName).Distinct().ToList()
+                    }
+                }).ToListAsync();
+
+            return Ok(ads);
+        }
+
+
 
 
         // ✅ POST: create ad
