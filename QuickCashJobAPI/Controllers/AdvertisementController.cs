@@ -51,9 +51,13 @@ namespace QuickCashJobAPI.Controllers
                     ? a.Description
                     : Regex.Replace(
                         a.Description ?? "",
-                        @"(\+?\d[\d\s\-]{7,}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
-                        "[Restricted]"
+                        @"(\+?\d[\d\s\-]{7,}|
+                          [A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|
+                          (?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
+                        "[Restricted]",
+                        RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase
                       ),
+
 
                     User = new AdUserDTO
                     {
