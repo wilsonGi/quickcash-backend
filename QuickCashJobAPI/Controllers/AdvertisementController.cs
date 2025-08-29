@@ -47,16 +47,20 @@ namespace QuickCashJobAPI.Controllers
                     Id = a.Id,
                     Category = a.Category,
                     Name = a.Name,
-                    Description = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
+                                    Description = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
                     ? a.Description
                     : Regex.Replace(
                         a.Description ?? "",
-                        @"(\+?\d[\d\s\-]{7,}|
-                          [A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|
-                          (?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
+                        @"(
+                            \+?\d[\d\s\-]{7,}                               # phone numbers
+                            |[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,} # emails
+                            |(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,} # websites/domains
+                            |(?<!\w)@\w{3,30}                               # social media handles
+                        )",
                         "[Restricted]",
                         RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase
                       ),
+
 
 
                     User = new AdUserDTO
