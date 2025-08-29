@@ -49,7 +49,9 @@ namespace QuickCashJobAPI.Controllers
                         Id = a.User.Id,
                         Name = a.User.Name,
                         Location = a.User.Location,
-                        PhoneNumber = a.User.PhoneNumber,
+                        PhoneNumber = (a.User.IsSubscriptionActive && a.User.IsApproved)
+                        ? a.User.PhoneNumber
+                        : "Restricted",
                         ProfilePhoto = a.User.ProfilePhoto != null
                             ? Convert.ToBase64String(a.User.ProfilePhoto)
                             : null,
