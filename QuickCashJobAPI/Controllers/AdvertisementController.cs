@@ -6,6 +6,7 @@ using QuickCashJobAPI.Models;
 using QuickCashJobAPI.Models.DTO;
 using QuickCashJobAPI.Services; // SD
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace QuickCashJobAPI.Controllers
 {
@@ -32,6 +33,9 @@ namespace QuickCashJobAPI.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
+            var currentUser = await GetCurrentUserAsync();
+
+
             var ads = await _db.Advertisements
                 .Include(a => a.User)
                 .Where(a => a.User != null &&
@@ -43,13 +47,17 @@ namespace QuickCashJobAPI.Controllers
                     Id = a.Id,
                     Category = a.Category,
                     Name = a.Name,
-                    Description = a.Description,
+                    Description = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
+                    ? a.Description
+                    : Regex.Replace(a.Description ?? "", @"(\+?\d[\d\s-]{7,}|[\w\.-]+@[\w\.-]+\.\w+)", "[Restricted]"),
+
                     User = new AdUserDTO
                     {
                         Id = a.User.Id,
                         Name = a.User.Name,
                         Location = a.User.Location,
-                        PhoneNumber = (a.User.IsSubscriptionActive && a.User.IsApproved)
+
+                        PhoneNumber = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
                         ? a.User.PhoneNumber
                         : "Restricted",
                         ProfilePhoto = a.User.ProfilePhoto != null
