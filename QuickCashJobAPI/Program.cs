@@ -165,7 +165,7 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<SubscriptionCheckService>();
+builder.Services.AddHostedService<SubscriptionCheckService>();
 builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddCors(options =>
