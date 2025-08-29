@@ -8,7 +8,6 @@
         public string Description { get; set; } = null!;
         public string Area { get; set; } = null!;
         public string Contact { get; set; } = null!;
-        public bool IsSubscriptionActive { get; set; }
 
         // 🔗 Foreign Key
         public string UserId { get; set; } = null!;

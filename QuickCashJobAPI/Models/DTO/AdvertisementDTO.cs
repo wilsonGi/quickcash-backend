@@ -9,7 +9,7 @@
         public string Name { get; set; } = null!;
         public string Description { get; set; } = null!;
 
-        public bool IsSubscriptionActive { get; set; }
+        public bool IsSubscriptionActive => User?.IsSubscriptionActive ?? false;
 
         // 👤 Nested User
         public AdUserDTO? User { get; set; }
