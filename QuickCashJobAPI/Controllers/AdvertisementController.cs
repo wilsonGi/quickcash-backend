@@ -49,7 +49,11 @@ namespace QuickCashJobAPI.Controllers
                     Name = a.Name,
                     Description = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
                     ? a.Description
-                    : Regex.Replace(a.Description ?? "", @"(\+?\d[\d\s-]{7,}|[\w\.-]+@[\w\.-]+\.\w+)", "[Restricted]"),
+                    : Regex.Replace(
+                        a.Description ?? "",
+                        @"(\+?\d[\d\s\-]{7,}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
+                        "[Restricted]"
+                      ),
 
                     User = new AdUserDTO
                     {
