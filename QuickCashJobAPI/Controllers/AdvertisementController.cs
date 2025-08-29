@@ -107,7 +107,9 @@ namespace QuickCashJobAPI.Controllers
                         UserRating = user.UserRating,
                         Skills = _db.UserSkills.Where(us => us.UserId == user.Id).Select(us => us.Skill.Name).ToList(),
                         CompletedCategories = _db.UserCompletedCategories.Where(uc => uc.UserId == user.Id).Select(uc => uc.Category.CategoryName).ToList(),
-                        EmployedCategories = _db.Jobs.Where(j => j.UserId == user.Id).Select(j => j.Category.CategoryName).Distinct().ToList()
+                        EmployedCategories = _db.Jobs.Where(j => j.UserId == user.Id).Select(j => j.Category.CategoryName).Distinct().ToList(),
+                        IsSubscriptionActive = a.User.IsSubscriptionActive,
+                        IsApproved = a.User.IsApproved
                     }
                 }).ToListAsync();
 
@@ -195,7 +197,9 @@ namespace QuickCashJobAPI.Controllers
                     UserRating = user.UserRating,
                     Skills = skills,
                     CompletedCategories = completedCategories,
-                    EmployedCategories = employedCategories
+                    EmployedCategories = employedCategories,
+                    IsSubscriptionActive = user.IsSubscriptionActive,
+                    IsApproved = user.IsApproved
                 }
             };
 

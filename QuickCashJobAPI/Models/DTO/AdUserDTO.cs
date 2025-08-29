@@ -15,6 +15,8 @@
         public List<string>? Skills { get; set; }
         public List<string>? CompletedCategories { get; set; }
         public List<string>? EmployedCategories { get; set; }
+        public bool IsSubscriptionActive { get; set; }
+        public bool IsApproved { get; set; }
     }
 
 }
