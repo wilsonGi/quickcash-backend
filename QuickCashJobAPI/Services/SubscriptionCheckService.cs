@@ -55,7 +55,7 @@ namespace QuickCashJobAPI.Services
                     if (user.IsSubscriptionActive || user.IsApproved) // only update if needed
                     {
                         user.IsSubscriptionActive = false;
-                        user.IsApproved = false;
+                       
                         _logger.LogInformation("Marked expired user inactive: {Email}", user.Email);
                     }
                 }

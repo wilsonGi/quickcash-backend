@@ -155,7 +155,7 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-        // User Registration Endpoint
+        // ✅ USER REGISTRATION ENDPOINT
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromForm] RegisterModel registerModel)
         {
@@ -169,7 +169,7 @@ namespace QuickCashJobAPI.Controllers
                     return BadRequest(new { message = errorMessages });
                 }
 
-                // Check for duplicate email, phone, and device
+                // 🔹 Check for duplicate email, phone, and device
                 if (await _userManager.FindByEmailAsync(registerModel.Email) != null)
                     return BadRequest(new { message = "This email is already registered." });
 
@@ -179,7 +179,18 @@ namespace QuickCashJobAPI.Controllers
                 if (_userManager.Users.Any(u => u.DeviceId == registerModel.DeviceId))
                     return BadRequest(new { message = "Registration from this device is already used." });
 
-                // Validate profile photo if provided
+                // 🔹 Check if user already used trial
+                bool hasTrialBefore = await _db.TrialRecords.AnyAsync(r =>
+                    r.Email == registerModel.Email ||
+                    r.PhoneNumber == registerModel.PhoneNumber ||
+                    r.DeviceId == registerModel.DeviceId);
+
+                if (hasTrialBefore)
+                {
+                    return BadRequest(new { message = "You have already used a free trial. Please subscribe or choose PAYG." });
+                }
+
+                // 🔹 Validate profile photo
                 if (registerModel.ProfilePhoto != null)
                 {
                     if (registerModel.ProfilePhoto.Length > 5 * 1024 * 1024)
@@ -191,29 +202,36 @@ namespace QuickCashJobAPI.Controllers
                         return BadRequest(new { message = "Invalid file type. Only JPG, JPEG, and PNG are allowed." });
                 }
 
-                // Create user
+                // ✅ Create user with *no active subscription* yet
                 var user = new ApplicationUser
                 {
                     UserName = registerModel.Email,
                     Email = registerModel.Email,
                     Name = registerModel.Name,
                     Location = registerModel.Location,
+                    PhoneNumber = registerModel.PhoneNumber,
+                    DeviceId = registerModel.DeviceId,
                     NumberOfTasksCompleted = 0,
                     NumberOfTasksEmployed = 0,
                     LastTaskDoneDate = DateTime.SpecifyKind(registerModel.LastTaskDoneDate, DateTimeKind.Utc),
                     LastTaskEmployedDate = DateTime.SpecifyKind(registerModel.LastTaskEmployedDate, DateTimeKind.Utc),
                     DateJoined = DateTime.SpecifyKind(registerModel.DateJoined, DateTimeKind.Utc),
-                    PhoneNumber = registerModel.PhoneNumber,
+
+                    // 🚫 Trial and subscription not yet active
                     IsAdmin = false,
-                    TrialEndDate = DateTime.UtcNow.AddDays(7),
-                    DeviceId = registerModel.DeviceId
+                    IsApproved = false,
+                    IsSubscriptionActive = false,
+                    CurrentPlanId = null,
+                    TrialEndDate = DateTime.MinValue,
+                    SubscriptionStartDate = null,
+                    SubscriptionEndDate = null
                 };
 
                 var result = await _userManager.CreateAsync(user, registerModel.Password);
                 if (!result.Succeeded)
                     return BadRequest(result.Errors);
 
-                // Process profile photo
+                // 🔹 Process profile photo
                 if (registerModel.ProfilePhoto != null)
                 {
                     using var memoryStream = new MemoryStream();
@@ -222,34 +240,32 @@ namespace QuickCashJobAPI.Controllers
                     await _userManager.UpdateAsync(user);
                 }
 
-                // Assign role
+                // 🔹 Assign role
                 var role = registerModel.IsAdmin ? "Admin" : "Customer";
                 await _userManager.AddToRoleAsync(user, role);
 
-                // Send email and return status
-                if (!user.IsApproved)
+                // 🔹 Send registration email (pending approval)
+                try
                 {
-                    await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
-                        $"Dear {user.Name},<br><br>Your registration is successful,<br><strong>Email:</strong> {user.Email}<br>Please wait for approval to get full access. Thank you.");
-                    return Ok(new { message = "User registered successfully, pending approval" });
+                    await _emailSender.SendEmailAsync(
+                    user.Email,
+                    "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
+                    $@"
+                    <p>Dear {user.Name},</p>
+                    <p>Thank you for registering with <strong>Splxit Jobs</strong>!</p>
+                    <p>Your account has been successfully created and is currently <strong>pending admin approval</strong>.</p>
+                    <p>Once approved, you’ll receive an email confirming activation of your <strong>7-day free trial</strong> period.</p>
+                    <p>We’re excited to have you on board and can’t wait for you to start exploring opportunities on our platform.</p>
+                    <p>Warm regards,<br><strong>The Splxit Jobs Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
+                    "
+                );
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogWarning(emailEx, "Failed to send registration email to {Email}", user.Email);
                 }
 
-                if (user.IsApproved)
-                {
-                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-
-                    await _emailSender.SendEmailAsync(user.Email, "Welcome to the app",
-                        $"Dear {user.Name},<br><br>Welcome to Quick Cash Job app! You have been approved as a user.");
-
-                    if (_userManager.Options.SignIn.RequireConfirmedAccount)
-                        return Ok(new { message = "User registered successfully. Please confirm your email." });
-
-                    await _signInManager.SignInAsync(user, isPersistent: false);
-                    return Ok(new { message = "User registered and signed in successfully" });
-                }
-
-                return Ok(new { message = "User registered successfully" });
+                return Ok(new { message = "User registered successfully, pending approval." });
             }
             catch (Exception ex)
             {
@@ -257,6 +273,7 @@ namespace QuickCashJobAPI.Controllers
                 return StatusCode(500, new { message = ex.Message });
             }
         }
+
 
 
         [Authorize]
@@ -303,6 +320,16 @@ namespace QuickCashJobAPI.Controllers
 
             if (user == null)
             {
+                // 🔹 NEW: permanent trial check
+                bool hasTrialBefore = await _db.TrialRecords.AnyAsync(r =>
+                    r.Email == payload.Email ||
+                    r.DeviceId == model.DeviceId); // include DeviceId in GoogleLoginDto
+
+                if (hasTrialBefore)
+                {
+                    return BadRequest(new { message = "You have already used a free trial. Please subscribe or choose PAYG." });
+                }
+
                 user = new ApplicationUser
                 {
                     Email = payload.Email,
@@ -316,12 +343,22 @@ namespace QuickCashJobAPI.Controllers
                     TrialEndDate = DateTime.UtcNow.AddDays(7),
                     IsSubscriptionActive = true,
                     IsApproved = false,
-                    IsAdmin = false
+                    IsAdmin = false,
+                    DeviceId = model.DeviceId // capture device too
                 };
 
                 var result = await _userManager.CreateAsync(user);
                 if (!result.Succeeded)
                     return BadRequest(result.Errors);
+
+                // 🔹 Save permanent trial record
+                _db.TrialRecords.Add(new TrialRecord
+                {
+                    Email = user.Email,
+                    PhoneNumber = user.PhoneNumber,
+                    DeviceId = user.DeviceId
+                });
+                await _db.SaveChangesAsync();
 
                 await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
                     $"Dear {user.Name},<br><br>Your Google sign-in is successful,<br><strong>Email:</strong> {user.Email}<br>Please wait for approval to get full access. Thank you.");
@@ -364,6 +401,7 @@ namespace QuickCashJobAPI.Controllers
                 isSubscriptionActive = user.IsSubscriptionActive
             });
         }
+
 
 
         public class DeregisterRequest
@@ -415,7 +453,6 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-
         [HttpPost("register-admin")]
         public async Task<IActionResult> RegisterAdmin([FromForm] RegisterModel registerModel)
         {
@@ -425,6 +462,18 @@ namespace QuickCashJobAPI.Controllers
                 {
                     return BadRequest(ModelState);
                 }
+
+                // 🔹 Admins skip trial restrictions (no TrialRecords check)
+                // 🔹 Fetch special admin subscription plan
+                var adminPlan = await _db.SubscriptionPlans
+                    .FirstOrDefaultAsync(p => p.Name == "Admin Forever" && p.Type == SubscriptionTier.Subscribed);
+
+                if (adminPlan == null)
+                {
+                    return StatusCode(500, new { message = "Admin subscription plan is not configured." });
+                }
+
+                var now = DateTime.UtcNow;
 
                 var adminUser = new ApplicationUser
                 {
@@ -439,12 +488,23 @@ namespace QuickCashJobAPI.Controllers
                     UserRating = 0,
                     DateJoined = DateTime.SpecifyKind(registerModel.DateJoined, DateTimeKind.Utc),
                     PhoneNumber = registerModel.PhoneNumber,
+                    DeviceId = registerModel.DeviceId,
+
+                    // ✅ Admin privileges
                     IsAdmin = true,
                     IsApproved = true,
                     IsSubscriptionActive = true,
-                    TrialEndDate = DateTime.UtcNow.AddDays(30),
-                    DeviceId = registerModel.DeviceId
+
+                    // ✅ Subscription details
+                    CurrentPlanId = adminPlan.Id,
+                    SubscriptionStartDate = now,
+                    SubscriptionEndDate = now.AddYears(100), // or use AddDays(adminPlan.DurationDays)
+
+                    // Optional fallback
+                    TrialEndDate = now.AddYears(100)
                 };
+
+
 
                 if (registerModel.ProfilePhoto != null)
                 {
@@ -462,6 +522,7 @@ namespace QuickCashJobAPI.Controllers
 
                 await _userManager.AddToRoleAsync(adminUser, "Admin");
 
+                // Send welcome + confirmation email
                 await _emailSender.SendEmailAsync(adminUser.Email, "Admin Registration Successful",
                     $"Dear {adminUser.Name},<br><br>Your admin account has been successfully created.<br>" +
                     $"<strong>Email:</strong> {adminUser.Email}<br>" +
@@ -483,9 +544,7 @@ namespace QuickCashJobAPI.Controllers
             }
             catch (Exception ex)
             {
-                // Log the full error to console or logger
                 _logger.LogError(ex, "❌ Registration failed.");
-
                 return StatusCode(500, new
                 {
                     error = "Something went wrong during registration.",
@@ -493,6 +552,8 @@ namespace QuickCashJobAPI.Controllers
                 });
             }
         }
+
+
 
         //Firebase Cloud Messagimg (FCM) 
         [HttpPost("SaveToken")]

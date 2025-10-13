@@ -57,6 +57,19 @@ namespace QuickCashJobAPI.Models
 
 
 
+
+        // Add these to ApplicationUser:
+        public int? CurrentPlanId { get; set; }    // FK to SubscriptionPlan
+        public DateTime? SubscriptionStartDate { get; set; }
+        public DateTime? SubscriptionEndDate { get; set; }
+
+        // Navigation
+        public virtual SubscriptionPlan? CurrentPlan { get; set; }
+
+
+
+
+
         // Navigation property
         public virtual ICollection<JobCommitment> JobCommitments { get; set; } = new List<JobCommitment>();
         public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();

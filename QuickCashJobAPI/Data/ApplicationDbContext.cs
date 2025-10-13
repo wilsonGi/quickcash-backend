@@ -30,6 +30,17 @@ namespace QuickCashJobAPI.Data
         public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
 
         public DbSet<Advertisement> Advertisements { get; set; }
+        public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
+        public DbSet<Payment> Payments { get; set; }
+
+        public DbSet<PaystackTransaction> PaystackTransactions { get; set; }
+        public DbSet<TrialRecord> TrialRecords { get; set; }
+
+        public DbSet<PayAsYouGoRate> PayAsYouGoRates { get; set; }
+        public DbSet<PayAsYouGoTransaction> PayAsYouGoTransactions { get; set; }
+
+
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -215,13 +226,10 @@ namespace QuickCashJobAPI.Data
             });
 
 
-            //Configure the Payout property
-            modelBuilder.Entity<Job>()
-           .Property(j => j.Payout)
-           .HasColumnType("float"); // Change to float for double
+           
 
 
-                    modelBuilder.Entity<Advertisement>()
+            modelBuilder.Entity<Advertisement>()
             .HasOne(a => a.User)
             .WithMany(u => u.Advertisements)
             .HasForeignKey(a => a.UserId)
@@ -267,6 +275,14 @@ namespace QuickCashJobAPI.Data
                 .WithMany(s => s.UserSkills)
                 .HasForeignKey(us => us.SkillId);
 
+
+            modelBuilder.Entity<PaystackTransaction>()
+                .HasOne<SubscriptionPlan>(pt => pt.Plan)
+                .WithMany()
+                .HasForeignKey(pt => pt.PlanId);
+
+
+
             // Force UTC for all DateTime properties in Blog
             modelBuilder.Entity<Blog>().Property(b => b.CreatedAt)
                 .HasConversion(
@@ -300,6 +316,60 @@ namespace QuickCashJobAPI.Data
                     }
                 }
             }
+
+
+    modelBuilder.Entity<PayAsYouGoRate>().HasData(
+    new PayAsYouGoRate { Id = 1, Action = "POST_JOB", Amount = 10, Description = "Pay GHS 10 to post a job (7 days)" },
+    new PayAsYouGoRate { Id = 2, Action = "POST_AD", Amount = 15, Description = "Pay GHS 15 to post an advert (15 days)" },
+    new PayAsYouGoRate { Id = 3, Action = "COMMIT_JOB", Amount = 5, Description = "Pay GHS 5 to commit to a job" },
+    new PayAsYouGoRate { Id = 4, Action = "VIEW_AD_DETAILS", Amount = 3, Description = "Pay GHS 3 to view advert contact details" },
+    new PayAsYouGoRate { Id = 5, Action = "APPROVE_CONTRACTOR", Amount = 5, Description = "Pay GHS 5 to approve a contractor" },
+    new PayAsYouGoRate { Id = 6, Action = "REACTIVATE_JOB", Amount = 8, Description = "Pay GHS 8 to reactivate an expired job" }
+);
+
+
+
+
+            modelBuilder.Entity<SubscriptionPlan>().HasData(
+        new SubscriptionPlan
+        {
+            Id = 1,
+            Name = "7 Days Free Trial",
+            Type = SubscriptionTier.FreeTrial,
+            Amount = 0,
+            DurationDays = 7,
+            Features = "VIEW_JOBS,POST_JOB_LIMIT_3,COMMIT_JOB_LIMIT_3,VIEW_AD_LIMIT_5,POST_AD_LIMIT_3"
+        },
+        new SubscriptionPlan
+        {
+            Id = 2,
+            Name = "Subscribed User",
+            Type = SubscriptionTier.Subscribed,
+            Amount = 100, // GHS or USD, your choice
+            DurationDays = 30,
+            Features = "UNLIMITED_JOBS,UNLIMITED_ADS,VIEW_ALL_ADS,COMMIT_UNLIMITED"
+        },
+        new SubscriptionPlan
+        {
+            Id = 3,
+            Name = "Pay As You Go",
+            Type = SubscriptionTier.PayAsYouGo,
+            Amount = 0,
+            DurationDays = 0,
+            Features = "PAY_PER_ACTION"
+        },
+        new SubscriptionPlan
+        {
+            Id = 4,
+            Name = "Admin Forever",
+            Type = SubscriptionTier.AdminForever,
+            Amount = 0,
+            DurationDays = 36500, // ~100 years
+            Features = "ALL_ACCESS,UNLIMITED_JOBS,UNLIMITED_ADS,MANAGE_USERS,SUPER_PRIVILEGES",
+            IsActive = true
+        }
+    );
+
         }
     }
 }

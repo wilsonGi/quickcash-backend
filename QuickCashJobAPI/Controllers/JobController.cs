@@ -21,15 +21,21 @@ namespace QuickCashJobAPI.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUserService _userService;
         private readonly NotificationService _notificationService;
+        private readonly SubscriptionService _subscriptionService;
+
+
+
         public JobController(ApplicationDbContext db, 
             UserManager<ApplicationUser> userManager, 
             IUserService userService,
+            SubscriptionService subscriptionService,
             NotificationService notificationService)
 
         {
             _db = db;
             _userManager = userManager;
             _userService = userService;
+            _subscriptionService = subscriptionService;
             _notificationService = notificationService;
 
         }
@@ -465,7 +471,6 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-
         [Authorize]
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created, Type = typeof(JobDTO))]
@@ -473,40 +478,31 @@ namespace QuickCashJobAPI.Controllers
         public async Task<ActionResult<JobDTO>> CreateJob([FromBody] JobCreateDTO jobCreateDTO)
         {
             if (jobCreateDTO == null)
-            {
-                return BadRequest();
-            }
-
+                return BadRequest(new { message = "Job data is missing" });
 
             var category = await _db.Categories.FirstOrDefaultAsync(c => c.Id == jobCreateDTO.CategoryId);
             if (category == null)
-            {
                 return BadRequest(new { message = "Invalid Category ID" });
-            }
-
 
             var user = await GetCurrentUserAsync();
             if (user == null)
-            {
-                return Unauthorized(new { message = "User not found." });
-            }
+                return Unauthorized(new { message = "User not found" });
 
             if (!HasValidSubscription(user))
-            {
                 return Forbid();
-            }
 
             if (!user.IsApproved || user.IsBlocked)
-            {
                 return Forbid("Your account is not approved or is blocked.");
-            }
+
+            if (!await _subscriptionService.CanPostJob(user))
+                return BadRequest(new { message = "Your plan does not allow posting jobs. Upgrade or PAYG." });
 
             var job = new Job
             {
                 CategoryId = jobCreateDTO.CategoryId,
                 Description = jobCreateDTO.Description,
                 Location = jobCreateDTO.Location,
-                Status = JobStatus.Active, // Automatically set to Active
+                Status = JobStatus.Active,
                 DatePosted = DateTime.UtcNow,
                 AudioDescription = jobCreateDTO.AudioDescription,
                 Payout = jobCreateDTO.Payout,
@@ -517,27 +513,12 @@ namespace QuickCashJobAPI.Controllers
                 UserLastTaskEmployedDate = DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc),
                 UserRating = user.UserRating,
                 UserPhoneNumber = user.PhoneNumber,
-                UserId = user.Id // Set the UserId
+                UserId = user.Id
             };
 
             category.NumberOfInstances++;
             _db.Jobs.Add(job);
             await _db.SaveChangesAsync();
-
-            // ✅ Send notification to all subscribed, approved, not-deleted users (except job creator)
-            var recipients = _db.Users
-                .Where(u => u.IsApproved && !u.IsDeleted && u.IsSubscriptionActive && u.Id != user.Id && u.FcmToken != null)
-                .ToList();
-
-            foreach (var recipient in recipients)
-            {
-                await _notificationService.SendNotificationAsync(
-                    recipient.FcmToken!,
-                    "New Job Posted",
-                    $"{user.Name} just posted a new job. Check it out!"
-                );
-            }
-
 
             var jobDto = new JobDTO
             {
@@ -559,8 +540,36 @@ namespace QuickCashJobAPI.Controllers
                 UserPhoneNumber = job.UserPhoneNumber
             };
 
-            return CreatedAtRoute("GetJob", new { id = job.Id }, jobDto);
+            // ✅ Fire-and-forget notifications (runs after DB save)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var recipients = await _db.Users
+                        .Where(u => u.IsApproved && !u.IsDeleted && u.IsSubscriptionActive && u.Id != user.Id && u.FcmToken != null)
+                        .ToListAsync();
+
+                    var tasks = recipients.Select(r =>
+                        _notificationService.SendNotificationAsync(
+                            r.FcmToken!,
+                            "New Job Posted",
+                            $"{user.Name} just posted a new job. Check it out!"
+                        )
+                    );
+
+                    await Task.WhenAll(tasks);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Background notification error: {ex.Message}");
+                }
+            });
+
+            // ✅ Return immediately (no waiting)
+            return Created($"api/job/{job.Id}", jobDto);
         }
+
+
 
 
         [Authorize]
@@ -597,6 +606,11 @@ namespace QuickCashJobAPI.Controllers
             {
                 return StatusCode(403, new { message = "Your account is not approved or is blocked." });
             }
+
+            // 🔑 Feature gate check
+            if (!await _subscriptionService.CanCommitJob(user))
+                return BadRequest(new { message = "Your plan does not allow committing to jobs." });
+
 
             if (job.UserId == user.Id)
             {
@@ -775,10 +789,10 @@ namespace QuickCashJobAPI.Controllers
                 return Unauthorized(new { message = "User is not authorized." });
             }
 
-            if (!HasValidSubscription(user))
-            {
-                return Forbid();
-            }
+            // 🔑 optional feature gate (if you want approvals gated)
+            if (!await _subscriptionService.CanPostJob(user)) // or CanManageJob if you add one
+                return BadRequest(new { message = "Your plan does not allow approving contractors." });
+
 
             if (job.UserId != user.Id)
             {
@@ -848,6 +862,11 @@ namespace QuickCashJobAPI.Controllers
                 return Forbid("Your account is not approved or is blocked.");
             }
 
+            // 🔑 optional feature gate
+            if (!await _subscriptionService.CanPostJob(user))
+                return BadRequest(new { message = "Your plan does not allow managing jobs." });
+
+
             if (job.UserId != user.Id)
             {
                 return BadRequest(new { message = "You cannot disapprove a task you didn't create." });
@@ -882,15 +901,17 @@ namespace QuickCashJobAPI.Controllers
                 return Unauthorized(new { message = "User not found." });
             }
 
-            if (!HasValidSubscription(user))
-            {
-                return Forbid();
-            }
+           
 
             if (!user.IsApproved || user.IsBlocked)
             {
                 return Forbid("Your account is not approved or is blocked.");
             }
+
+            // 🔑 use commit gate here (since confirm is also worker-side)
+            if (!await _subscriptionService.CanCommitJob(user))
+                return BadRequest(new { message = "Your plan does not allow confirming jobs." });
+
 
             if (job.UserId == user.Id)
             {
@@ -947,16 +968,18 @@ namespace QuickCashJobAPI.Controllers
                 return Unauthorized(new { message = "User not found." });
             }
 
-            if (!HasValidSubscription(user))
-            {
-                return Forbid();
-            }
+            
 
 
             if (!user.IsApproved || user.IsBlocked)
             {
                 return Forbid("Your account is not approved or is blocked.");
             }
+
+            // 🔑 creator action, so check posting rights
+            if (!await _subscriptionService.CanPostJob(user))
+                return BadRequest(new { message = "Your plan does not allow completing jobs." });
+
 
             // Ensure the user marking the job as completed is the job creator
             if (job.UserId != user.Id)
@@ -1015,7 +1038,9 @@ namespace QuickCashJobAPI.Controllers
             }
 
             await _db.SaveChangesAsync();
-            return Ok(new { message = "Task marked as completed." });
+            return Ok(new { message = "Task marked as completed."
+            
+            });
         }
 
 

@@ -12,7 +12,7 @@ namespace QuickCashJobAPI.Models.DTO
         public JobStatus Status { get; set; }
         public DateTime DatePosted { get; set; }
         public byte[]? AudioDescription { get; set; }
-        public double Payout { get; set; }
+        public string Payout { get; set; }
         public bool Negotiable { get; set; }
 
         // Fields from ApplicationUser that are safe to expose

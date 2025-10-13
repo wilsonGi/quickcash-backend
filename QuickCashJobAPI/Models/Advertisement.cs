@@ -14,6 +14,11 @@
 
         // 👤 Navigation Property
         public ApplicationUser User { get; set; } = null!;
+
+        // ✅ New fields
+        public bool IsActive { get; set; } = true;
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
 }

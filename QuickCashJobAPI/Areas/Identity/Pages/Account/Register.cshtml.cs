@@ -217,7 +217,7 @@ namespace QuickCashJobAPI.Areas.Identity.Pages.Account
                         try
                         {
                             await _emailSender.SendEmailAsync(Input.Email, "Welcome to the app",
-                               $"Dear {user.Name}, <br><br>Welcome to Quick Cash Job app! You have been approved as a user.");
+                               $"Dear {user.Name}, <br><br>Welcome to Splxit Jobs app! You have been approved as a user.");
                         }
                         catch (Exception ex)
                         {
@@ -240,7 +240,7 @@ namespace QuickCashJobAPI.Areas.Identity.Pages.Account
                             protocol: Request.Scheme);
 
                         await _emailSender.SendEmailAsync(Input.Email, "Welcome to the app",
-                        $"Dear {user.Name}, <br><br>Welcome to Quick Cash Job app! You have been approved as a user.");
+                        $"Dear {user.Name}, <br><br>Welcome to Splxit Jobs app! You've been approved!");
 
                         if (_userManager.Options.SignIn.RequireConfirmedAccount)
                         {

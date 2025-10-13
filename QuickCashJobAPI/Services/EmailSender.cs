@@ -24,7 +24,7 @@ namespace QuickCashJobAPI.Services
                 var smtpClient = new SmtpClient(_settings.SmtpServer)
                 {
                     Port = _settings.SmtpPort,
-                    Credentials = new NetworkCredential(_settings.SenderEmail, _settings.Password),
+                    Credentials = new NetworkCredential("apikey", _settings.Password),
                     EnableSsl = _settings.EnableSsl
                 };
 

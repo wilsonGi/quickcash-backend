@@ -10,7 +10,7 @@ namespace QuickCashJobAPI.Models.DTO
         public string Location { get; set; }
         public DateTime DatePosted { get; set; }
         public byte[]? AudioDescription { get; set; }
-        public double Payout { get; set; }
+        public string Payout { get; set; }
         public bool Negotiable { get; set; }
     }
 }

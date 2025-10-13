@@ -19,28 +19,36 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ✅ Load secrets from environment variables
 var emailPassword = Environment.GetEnvironmentVariable("EMAIL_PASSWORD");
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
-var adminEmail = Environment.GetEnvironmentVariable("COMPANY_ADMIN_EMAIL");
-var adminPassword = Environment.GetEnvironmentVariable("COMPANY_ADMIN_PASSWORD");
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "local-dev-secret"; // <-- FIXED
+var adminEmail = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_EMAIL");
+var adminPassword = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_PASSWORD");
 var mtnApiKey = Environment.GetEnvironmentVariable("MTN_API_KEY");
 var mtnSubscriptionKey = Environment.GetEnvironmentVariable("MTN_SUBSCRIPTION_KEY");
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-if (!string.IsNullOrEmpty(databaseUrl))
-{
-    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(connectionString));
-}
-else
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(connectionString)); 
+//--------- REMOVE THIS BLOCK FOR RAILWAY -------------
+// 🔒 Force SQL Server (ignore DATABASE_URL for now)
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
 
-    //builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    //    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-}
+
+//UMCOMMEMET FOR RAILWAY
+//if (!string.IsNullOrEmpty(databaseUrl))
+//{
+//    // Railway PostgreSQL
+//    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//        options.UseNpgsql(connectionString));
+//}
+//else
+//{
+//    // Local SQL Server
+//    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//        options.UseSqlServer(connectionString));
+//}
+
 
 builder.Services.Configure<EmailSettings>(options =>
 {
@@ -134,6 +142,8 @@ builder.Services.AddAuthentication(x =>
 builder.Services.AddControllers().AddNewtonsoftJson();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSignalR();
+builder.Services.Configure<PaystackOptions>(builder.Configuration.GetSection("Paystack"));
+builder.Services.AddHttpClient<IPaystackService, PaystackService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -166,6 +176,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddHostedService<SubscriptionCheckService>();
+builder.Services.AddScoped<SubscriptionService>();
 builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddCors(options =>
@@ -281,6 +292,18 @@ static async Task SeedSuperAdmin(
             return;
         }
 
+        // 🔹 Fetch the "Admin Forever" subscription plan
+        var foreverPlan = await context.SubscriptionPlans
+            .FirstOrDefaultAsync(p => p.Name == "Admin Forever" && p.Type == SubscriptionTier.AdminForever);
+
+        if (foreverPlan == null)
+        {
+            logger.LogError("❌ Admin Forever plan not found. Please seed this plan in the database.");
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+
         var adminUser = new ApplicationUser
         {
             UserName = companyAdminEmail,
@@ -289,22 +312,30 @@ static async Task SeedSuperAdmin(
             Location = "Ghana",
             NumberOfTasksCompleted = 0,
             NumberOfTasksEmployed = 0,
-            LastTaskDoneDate = DateTime.UtcNow,
-            LastTaskEmployedDate = DateTime.UtcNow,
+            LastTaskDoneDate = now,
+            LastTaskEmployedDate = now,
             UserRating = 100,
-            DateJoined = DateTime.UtcNow,
+            DateJoined = now,
             PhoneNumber = "+233534861417",
+
+            // ✅ Super Admin Privileges
             IsAdmin = true,
-            IsSubscriptionActive = true,
             IsApproved = true,
+            IsSubscriptionActive = true,
+
+            // ✅ Everlasting Plan
             TrialEndDate = DateTime.MaxValue,
+            CurrentPlanId = foreverPlan.Id,
+            SubscriptionStartDate = now,
+            SubscriptionEndDate = now.AddYears(100) // or DateTime.MaxValue if you prefer
         };
 
         var result = await userManager.CreateAsync(adminUser, password);
         if (result.Succeeded)
         {
             await userManager.AddToRoleAsync(adminUser, SD.Role_Admin);
-            logger.LogInformation("✅ Super Admin created successfully.");
+
+            logger.LogInformation("✅ Super Admin created and assigned 'Admin Forever' plan.");
         }
         else
         {
@@ -316,4 +347,3 @@ static async Task SeedSuperAdmin(
         }
     }
 }
-    
