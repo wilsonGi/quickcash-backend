@@ -70,6 +70,31 @@ namespace QuickCashJobAPI.Controllers
             return Ok(plan);
         }
 
+
+
+        // ✅ 0. Get all active subscription plans
+        [HttpGet("subscription-plans")]
+        public async Task<IActionResult> GetAllSubscriptionPlans()
+        {
+            var plans = await _db.SubscriptionPlans
+        .Where(p => p.IsActive && p.Type != SubscriptionTier.AdminForever)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    Type = p.Type.ToString(),
+                    SubscriptionType = p.Type.ToString(),
+                    p.Amount,
+                    p.DurationDays,
+                    p.Features
+                })
+                .ToListAsync();
+
+            return Ok(plans);
+        }
+
+
+
         // ✅ 3. Initialize Paystack Payment
         [HttpPost("pay-subscription")]
         public async Task<IActionResult> PaySubscription([FromBody] PaymentRequest request)

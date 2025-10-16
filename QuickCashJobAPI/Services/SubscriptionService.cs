@@ -9,6 +9,7 @@ namespace QuickCashJobAPI.Services
     {
         private readonly ApplicationDbContext _db;
 
+
         public SubscriptionService(ApplicationDbContext db)
         {
             _db = db;

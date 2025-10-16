@@ -489,7 +489,13 @@ namespace QuickCashJobAPI.Controllers
                 return Unauthorized(new { message = "User not found" });
 
             if (!HasValidSubscription(user))
-                return Forbid();
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = "Access denied. You need an active subscription, trial, or PAYG to post a job."
+                });
+            }
+
 
             if (!user.IsApproved || user.IsBlocked)
                 return Forbid("Your account is not approved or is blocked.");

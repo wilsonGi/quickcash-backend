@@ -15,8 +15,79 @@ namespace QuickCashJobAPI.Controllers
     public class AdvertisementController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
+        private readonly SubscriptionService _subscriptionService;
 
-        public AdvertisementController(ApplicationDbContext db) => _db = db;
+        public AdvertisementController(ApplicationDbContext db, SubscriptionService subscriptionService)
+        {
+            _db = db;
+            _subscriptionService = subscriptionService;
+        }
+
+        [HttpPost]
+        [Authorize]
+        public async Task<IActionResult> Create([FromBody] AdvertisementDTO model)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(user.Location) || string.IsNullOrWhiteSpace(user.PhoneNumber))
+                return BadRequest("Your profile must include Location and Phone Number to post an ad.");
+
+            // 🔒 New: Use SubscriptionService to check limits
+            bool canPostAd = await _subscriptionService.CanPostAd(user);
+            if (!canPostAd)
+            {
+                return StatusCode(402, new
+                {
+                    code = "AD_LIMIT_REACHED",
+                    message = "You have reached your advertisement limit. Please upgrade your plan or PAYG to continue."
+                });
+            }
+
+
+
+            // ✅ Proceed only if allowed
+            var ad = new Advertisement
+            {
+                Category = model.Category,
+                Name = string.IsNullOrWhiteSpace(model.Name) ? user.Name : model.Name,
+                Description = model.Description,
+                Area = user.Location,
+                Contact = user.PhoneNumber,
+                UserId = user.Id,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+
+            _db.Advertisements.Add(ad);
+            await _db.SaveChangesAsync();
+
+            var dto = new AdvertisementDTO
+            {
+                Id = ad.Id,
+                Category = ad.Category,
+                Name = ad.Name,
+                Description = ad.Description,
+                User = new AdUserDTO
+                {
+                    Id = user.Id,
+                    Name = user.Name,
+                    Location = user.Location,
+                    PhoneNumber = user.PhoneNumber,
+                    ProfilePhoto = user.ProfilePhoto != null
+                        ? Convert.ToBase64String(user.ProfilePhoto)
+                        : null,
+                    NumberOfTasksCompleted = user.NumberOfTasksCompleted,
+                    NumberOfTasksEmployed = user.NumberOfTasksEmployed,
+                    UserRating = user.UserRating,
+                    IsSubscriptionActive = user.IsSubscriptionActive,
+                    IsApproved = user.IsApproved
+                }
+            };
+
+            return Ok(dto);
+        }
+
 
         private async Task<ApplicationUser?> GetCurrentUserAsync()
         {
@@ -132,66 +203,7 @@ namespace QuickCashJobAPI.Controllers
             return Ok(ads);
         }
 
-        [HttpPost]
-        [Authorize]
-        public async Task<IActionResult> Create([FromBody] AdvertisementDTO model)
-        {
-            var user = await GetCurrentUserAsync();
-            if (user == null) return Unauthorized();
-
-            if (string.IsNullOrWhiteSpace(user.Location) || string.IsNullOrWhiteSpace(user.PhoneNumber))
-            {
-                return BadRequest("Your profile must include Location and Phone Number to post an ad.");
-            }
-
-            if (!user.IsApproved || !user.IsSubscriptionActive || user.IsDeleted)
-            {
-                return BadRequest("Only approved, active, and non-deleted users can create ads.");
-            }
-
-            var ad = new Advertisement
-            {
-                Category = model.Category,
-                Name = string.IsNullOrWhiteSpace(model.Name) ? user.Name : model.Name,
-                Description = model.Description,
-                Area = user.Location,
-                Contact = user.PhoneNumber,
-                UserId = user.Id
-            };
-
-            _db.Advertisements.Add(ad);
-            await _db.SaveChangesAsync();
-
-            var dto = new AdvertisementDTO
-            {
-                Id = ad.Id,
-                Category = ad.Category,
-                Name = ad.Name,
-                Description = ad.Description,
-                User = new AdUserDTO
-                {
-                    Id = user.Id,
-                    Name = user.Name,
-                    Location = user.Location,
-                    PhoneNumber = user.PhoneNumber,
-                    ProfilePhoto = user.ProfilePhoto != null
-                        ? Convert.ToBase64String(user.ProfilePhoto)
-                        : null,
-                    NumberOfTasksCompleted = user.NumberOfTasksCompleted,
-                    NumberOfTasksEmployed = user.NumberOfTasksEmployed,
-                    LastTaskDoneDate = user.LastTaskDoneDate == default ? null : user.LastTaskDoneDate,
-                    LastTaskEmployedDate = user.LastTaskEmployedDate == default ? null : user.LastTaskEmployedDate,
-                    UserRating = user.UserRating,
-                    Skills = _db.UserSkills.Where(us => us.UserId == user.Id).Select(us => us.Skill.Name).ToList(),
-                    CompletedCategories = _db.UserCompletedCategories.Where(uc => uc.UserId == user.Id).Select(uc => uc.Category.CategoryName).ToList(),
-                    EmployedCategories = _db.Jobs.Where(j => j.UserId == user.Id).Select(j => j.Category.CategoryName).Distinct().ToList(),
-                    IsSubscriptionActive = user.IsSubscriptionActive,
-                    IsApproved = user.IsApproved
-                }
-            };
-
-            return Ok(dto);
-        }
+        
 
         [HttpPut("{id}")]
         [Authorize]
