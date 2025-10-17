@@ -77,8 +77,9 @@ namespace QuickCashJobAPI.Controllers
         public async Task<IActionResult> GetAllSubscriptionPlans()
         {
             var plans = await _db.SubscriptionPlans
-        .Where(p => p.IsActive && p.Type != SubscriptionTier.AdminForever)
-                .Select(p => new
+            .Where(p => p.IsActive
+                && p.Type != SubscriptionTier.AdminForever
+                && p.Type != SubscriptionTier.FreeTrial).Select(p => new
                 {
                     p.Id,
                     p.Name,
