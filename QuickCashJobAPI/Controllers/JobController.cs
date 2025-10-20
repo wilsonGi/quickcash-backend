@@ -124,10 +124,6 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-
-
-
-
         [HttpGet("GetAllSkills")]
         public async Task<IActionResult> GetAllSkills()
         {

@@ -131,29 +131,6 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-        private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
-        {
-            var tokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateAudience = true,
-                ValidateIssuer = true,
-                ValidateIssuerSigningKey = true,
-                ValidateLifetime = false, // Ignore expiration
-                ValidIssuer = _configuration["JWT:ValidIssuer"],
-                ValidAudience = _configuration["JWT:ValidAudience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]))
-            };
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
-
-            if (securityToken is not JwtSecurityToken jwtSecurityToken)
-                throw new SecurityTokenException("Invalid token");
-
-            return principal;
-        }
-
-
 
         // ✅ USER REGISTRATION ENDPOINT
         [HttpPost("register")]
@@ -627,32 +604,71 @@ namespace QuickCashJobAPI.Controllers
             return Ok(notifications);
         }
 
-
         private string GenerateJwtToken(ApplicationUser user, bool isAdmin, bool isSubscriptionActive, bool isApproved)
         {
             var jwtSettings = _configuration.GetSection("JWT");
-            var key = Encoding.ASCII.GetBytes(jwtSettings.GetValue<string>("Secret"));
+
+            // ✅ Load secret from appsettings or environment
+            var secret = _configuration["JWT:Secret"] ?? Environment.GetEnvironmentVariable("JWT_SECRET");
+            if (string.IsNullOrEmpty(secret))
+                throw new Exception("JWT secret is missing — check environment variables or appsettings.json.");
+
+            var key = Encoding.ASCII.GetBytes(secret);
             var tokenHandler = new JwtSecurityTokenHandler();
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[]
                 {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Name, user.Name), // Store Full Name
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName), // Store Username
-            new Claim("IsAdmin", isAdmin.ToString()),  // Add IsAdmin claim
+            new Claim(ClaimTypes.Name, user.Name),
+            new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? user.Email),
+            new Claim("IsAdmin", isAdmin.ToString()),
             new Claim("IsSubscriptionActive", isSubscriptionActive.ToString()),
-            new Claim("IsApproved", isApproved.ToString()),
-
-                }),
+            new Claim("IsApproved", isApproved.ToString())
+        }),
                 Expires = DateTime.UtcNow.AddHours(1),
                 Issuer = jwtSettings.GetValue<string>("ValidIssuer"),
                 Audience = jwtSettings.GetValue<string>("ValidAudience"),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                SigningCredentials = new SigningCredentials(
+                    new SymmetricSecurityKey(key),
+                    SecurityAlgorithms.HmacSha256Signature
+                )
             };
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
+        }
+
+
+        private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
+        {
+            // ✅ Load secret safely for validation
+            var secret = _configuration["JWT:Secret"] ?? Environment.GetEnvironmentVariable("JWT_SECRET");
+            if (string.IsNullOrEmpty(secret))
+                throw new Exception("JWT secret is missing — check environment variables or appsettings.json.");
+
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateAudience = true,
+                ValidateIssuer = true,
+                ValidateIssuerSigningKey = true,
+                ValidateLifetime = false, // ignore expiration for refresh
+                ValidIssuer = _configuration["JWT:ValidIssuer"],
+                ValidAudience = _configuration["JWT:ValidAudience"],
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret))
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
+
+            if (securityToken is not JwtSecurityToken jwtSecurityToken ||
+                !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            {
+                throw new SecurityTokenException("Invalid token");
+            }
+
+            return principal;
         }
 
 

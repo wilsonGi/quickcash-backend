@@ -25,7 +25,26 @@ builder.Configuration
 
 // ✅ Load secrets from environment variables
 var emailPassword = Environment.GetEnvironmentVariable("EMAIL_PASSWORD");
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "local-dev-secret"; // <-- FIXED
+// ✅ Load JWT Secret safely for both environments
+string? jwtSecret;
+
+if (builder.Environment.IsDevelopment())
+{
+    jwtSecret = builder.Configuration["JWT:Secret"]; // from appsettings.json
+    Console.WriteLine("🧩 Using JWT secret from appsettings.json (Development).");
+}
+else
+{
+    jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET"); // from Railway environment variable
+    Console.WriteLine("🚀 Using JWT secret from Railway environment variable.");
+}
+
+if (string.IsNullOrEmpty(jwtSecret))
+{
+    throw new Exception("❌ JWT secret is missing! Check appsettings.json or Railway environment variables.");
+}
+
+var key = Encoding.ASCII.GetBytes(jwtSecret);
 var adminEmail = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_EMAIL");
 var adminPassword = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_PASSWORD");
 var mtnApiKey = Environment.GetEnvironmentVariable("MTN_API_KEY");
@@ -34,24 +53,25 @@ var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 //--------- REMOVE THIS BLOCK FOR RAILWAY -------------
 // 🔒 Force SQL Server (ignore DATABASE_URL for now)
-//var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-//builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//    options.UseSqlServer(connectionString));
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
 
 
 //UMCOMMEMET FOR RAILWAY
-if (!string.IsNullOrEmpty(databaseUrl))
-{
-    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(connectionString));
-}
-else
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlServer(connectionString));
-}
+//if (!string.IsNullOrEmpty(databaseUrl))
+//{
+//    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//        options.UseNpgsql(connectionString));
+//}
+//else
+//{
+//    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//        options.UseSqlServer(connectionString));
+//}
 
 
 builder.Services.Configure<EmailSettings>(options =>
@@ -88,9 +108,11 @@ builder.Services.AddAuthorization(options =>
             context.User.HasClaim(claim => claim.Type == "IsAdmin" && claim.Value == "True")));
 });
 
-var jwtIssuer = builder.Configuration["JWT:ValidIssuer"] ?? "https://localhost:7018";
-var jwtAudience = builder.Configuration["JWT:ValidAudience"] ?? "https://localhost:7018";
-var key = Encoding.ASCII.GetBytes(jwtSecret ?? throw new Exception("JWT_SECRET not set in environment variables"));
+var jwtIssuer = Environment.GetEnvironmentVariable("JWT_VALIDISSUER")
+                ?? builder.Configuration["JWT:ValidIssuer"];
+
+var jwtAudience = Environment.GetEnvironmentVariable("JWT_VALIDAUDIENCE")
+                ?? builder.Configuration["JWT:ValidAudience"];
 
 builder.Services.AddAuthentication(x =>
 {

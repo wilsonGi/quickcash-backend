@@ -109,8 +109,6 @@ namespace QuickCashJobAPI.Controllers
             return Ok(userList);
         }
 
-        
-
 
         [HttpGet("profile-photo/{userId}")]
         public async Task<IActionResult> GetProfilePhoto(string userId)
@@ -120,7 +118,6 @@ namespace QuickCashJobAPI.Controllers
 
             return File(user.ProfilePhoto, "image/jpeg");
         }
-
 
 
 
@@ -142,9 +139,6 @@ namespace QuickCashJobAPI.Controllers
 
             return Ok(expiredUsers);
         }
-
-
-
 
 
         // ✅ APPROVE USER ENDPOINT
@@ -275,8 +269,6 @@ namespace QuickCashJobAPI.Controllers
                 return StatusCode(500, new { message = $"Unexpected error: {ex.Message}" });
             }
         }
-
-
 
 
         [HttpPost("DisapproveUser/{userId}")]
@@ -462,9 +454,6 @@ namespace QuickCashJobAPI.Controllers
             return Ok("User soft-deleted successfully.");
         }
 
-
-
-       
 
         [HttpPost("renew-subscription/{userId}")]
         public async Task<IActionResult> RenewSubscription(string userId) // Change int to string
