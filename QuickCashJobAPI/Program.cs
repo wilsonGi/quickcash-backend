@@ -16,6 +16,12 @@ using Microsoft.Extensions.Options;
 using System.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
+
+
 
 // ✅ Load secrets from environment variables
 var emailPassword = Environment.GetEnvironmentVariable("EMAIL_PASSWORD");
@@ -28,26 +34,24 @@ var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 //--------- REMOVE THIS BLOCK FOR RAILWAY -------------
 // 🔒 Force SQL Server (ignore DATABASE_URL for now)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+//var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+//builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//    options.UseSqlServer(connectionString));
 
 
 //UMCOMMEMET FOR RAILWAY
-//if (!string.IsNullOrEmpty(databaseUrl))
-//{
-//    // Railway PostgreSQL
-//    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//        options.UseNpgsql(connectionString));
-//}
-//else
-//{
-//    // Local SQL Server
-//    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//        options.UseSqlServer(connectionString));
-//}
+if (!string.IsNullOrEmpty(databaseUrl))
+{
+    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(connectionString));
+}
+else
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlServer(connectionString));
+}
 
 
 builder.Services.Configure<EmailSettings>(options =>
