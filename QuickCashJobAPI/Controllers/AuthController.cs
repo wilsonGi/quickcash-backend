@@ -289,85 +289,91 @@ namespace QuickCashJobAPI.Controllers
             return Ok(user);
         }
 
-        [HttpPost("google-login")]
-        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto model)
+
+        [HttpPost("social-login")]
+        public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
-            var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
-            var user = await _userManager.FindByEmailAsync(payload.Email);
+            ApplicationUser user = null;
+            string email = null;
+            string name = null;
+
+            // 1️⃣ Validate token per provider
+            if (model.Provider == "Google")
+            {
+                var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
+                email = payload.Email;
+                name = payload.Name;
+            }
+            else if (model.Provider == "Apple")
+            {
+                // Apple JWT validation logic here
+                // Extract email + name
+            }
+            else
+            {
+                return BadRequest(new { message = "Unsupported provider" });
+            }
+
+            // 2️⃣ Check if user exists
+            user = await _userManager.FindByEmailAsync(email);
 
             if (user == null)
             {
-                // 🔹 NEW: permanent trial check
-                bool hasTrialBefore = await _db.TrialRecords.AnyAsync(r =>
-                    r.Email == payload.Email ||
-                    r.DeviceId == model.DeviceId); // include DeviceId in GoogleLoginDto
+                // 3️⃣ Check for duplicates (email, phone, device) like regular registration
+                if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
+                    return BadRequest(new { message = "A user with this email or device already exists." });
 
-                if (hasTrialBefore)
-                {
-                    return BadRequest(new { message = "You have already used a free trial. Please subscribe or choose PAYG." });
-                }
-
+                // 4️⃣ Create user with no active trial or subscription yet
                 user = new ApplicationUser
                 {
-                    Email = payload.Email,
-                    UserName = payload.Email,
-                    Name = payload.Name,
-                    EmailConfirmed = true,
-                    Location = "Not Provided",
+                    Email = email,
+                    UserName = email,
+                    Name = name,
                     DateJoined = DateTime.UtcNow,
-                    LastTaskDoneDate = DateTime.UtcNow,
-                    LastTaskEmployedDate = DateTime.UtcNow,
-                    TrialEndDate = DateTime.UtcNow.AddDays(7),
-                    IsSubscriptionActive = true,
+                    DeviceId = model.DeviceId,
                     IsApproved = false,
-                    IsAdmin = false,
-                    DeviceId = model.DeviceId // capture device too
+                    IsSubscriptionActive = false,
+                    IsAdmin = false
                 };
 
                 var result = await _userManager.CreateAsync(user);
                 if (!result.Succeeded)
                     return BadRequest(result.Errors);
 
-                // 🔹 Save permanent trial record
-                _db.TrialRecords.Add(new TrialRecord
+                // Optional: Send pending approval email like registration
+                try
                 {
-                    Email = user.Email,
-                    PhoneNumber = user.PhoneNumber,
-                    DeviceId = user.DeviceId
-                });
-                await _db.SaveChangesAsync();
-
-                await _emailSender.SendEmailAsync(user.Email, "Registration successful!",
-                    $"Dear {user.Name},<br><br>Your Google sign-in is successful,<br><strong>Email:</strong> {user.Email}<br>Please wait for approval to get full access. Thank you.");
-
-                return Ok(new
+                    await _emailSender.SendEmailAsync(
+                        user.Email,
+                        "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
+                        $@"
+                <p>Dear {user.Name},</p>
+                <p>Your account has been created and is <strong>pending admin approval</strong>.</p>
+                <p>Once approved, your 7-day trial will be activated.</p>
+                <p>Thanks,<br>The Splxit Jobs Team</p>"
+                    );
+                }
+                catch (Exception ex)
                 {
-                    message = "User registered successfully via Google, pending admin approval.",
-                    isApproved = false,
-                    isAdmin = user.IsAdmin,
-                    isSubscriptionActive = user.IsSubscriptionActive,
-                    userId = user.Id,
-                    userName = user.Name,
-                    userEmail = user.Email
-                });
+                    _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
+                }
             }
 
+            // 5️⃣ Check approval status
             if (!user.IsApproved)
-            {
-                return Unauthorized(new { message = "Your account is pending approval by an admin." });
-            }
+                return Unauthorized(new { message = "Admin approval required." });
 
-            // Generate Refresh Token
+            // 6️⃣ Generate JWT & refresh token
             var refreshToken = GenerateRefreshToken();
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await _userManager.UpdateAsync(user);
 
-            var token = GenerateJwtToken(user, user.IsAdmin, user.IsSubscriptionActive, user.IsApproved);
+            var jwtToken = GenerateJwtToken(user, user.IsAdmin, user.IsSubscriptionActive, user.IsApproved);
 
             return Ok(new
             {
-                token,
+                token = jwtToken,
                 refreshToken,
                 refreshTokenExpiry = user.RefreshTokenExpiryTime,
                 userId = user.Id,
@@ -377,6 +383,31 @@ namespace QuickCashJobAPI.Controllers
                 isApproved = user.IsApproved,
                 isSubscriptionActive = user.IsSubscriptionActive
             });
+        }
+
+
+        private string GenerateJwtToken(ApplicationUser user)
+        {
+            var claims = new[]
+            {
+        new Claim(JwtRegisteredClaimNames.Sub, user.Id),
+        new Claim(JwtRegisteredClaimNames.Email, user.Email),
+        new Claim("isAdmin", user.IsAdmin.ToString()),
+        new Claim("isApproved", user.IsApproved.ToString())
+    };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddDays(7),
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
 
@@ -690,12 +721,14 @@ namespace QuickCashJobAPI.Controllers
             [Required]
             public string Password { get; set; }
 
-            [Required]
             [MaxLength(50)]
+            [Required(ErrorMessage = "Name is required")]
+            [RegularExpression(@"^[A-Za-z\s\-']+$", ErrorMessage = "Name must contain only letters and spaces.")]
             public string Name { get; set; }
 
-            [Required]
+
             [MaxLength(100)]
+            [Required(ErrorMessage = "Location is required")]
             public string Location { get; set; }
 
 
@@ -708,7 +741,9 @@ namespace QuickCashJobAPI.Controllers
             [Required]
             public DateTime DateJoined { get; set; } = DateTime.UtcNow;
 
-            [Required]
+
+            [Required(ErrorMessage = "Phone number is required")]
+            [RegularExpression(@"^[0-9+\-\s]+$", ErrorMessage = "Phone number must contain only digits and allowed symbols (+ - space).")]
             public string PhoneNumber { get; set; }
 
             [DefaultValue(false)]
