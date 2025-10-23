@@ -18,9 +18,10 @@ using System.Configuration;
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+    .AddUserSecrets<Program>(optional: true) // 👈 for local development secrets
     .AddEnvironmentVariables();
-
 
 
 // ✅ Load secrets from environment variables
@@ -28,20 +29,30 @@ var emailPassword = Environment.GetEnvironmentVariable("EMAIL_PASSWORD");
 // ✅ Load JWT Secret safely for both environments
 string? jwtSecret;
 
+// First, try environment variable (used in Railway)
+jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+
+// If not found, try User Secrets or appsettings.json (used in Development)
+if (string.IsNullOrEmpty(jwtSecret))
+{
+    jwtSecret = builder.Configuration["JWT:Secret"];
+}
+
+// If still missing, throw an error
+if (string.IsNullOrEmpty(jwtSecret))
+{
+    throw new Exception("❌ JWT secret is missing! Set it in User Secrets (local) or Railway environment variables.");
+}
+
+// Log safely depending on environment
 if (builder.Environment.IsDevelopment())
 {
-    jwtSecret = builder.Configuration["JWT:Secret"]; // from appsettings.json
-    Console.WriteLine("🧩 Using JWT secret from appsettings.json (Development).");
+    var masked = new string('*', jwtSecret.Length - 4) + jwtSecret[^4..];
+    Console.WriteLine($"🧩 Using JWT secret from local secrets/appsettings.json: {masked}");
 }
 else
 {
-    jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET"); // from Railway environment variable
     Console.WriteLine("🚀 Using JWT secret from Railway environment variable.");
-}
-
-if (string.IsNullOrEmpty(jwtSecret))
-{
-    throw new Exception("❌ JWT secret is missing! Check appsettings.json or Railway environment variables.");
 }
 
 var key = Encoding.ASCII.GetBytes(jwtSecret);
@@ -49,29 +60,30 @@ var adminEmail = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_EMAIL");
 var adminPassword = Environment.GetEnvironmentVariable("QUICKCASH_ADMIN_PASSWORD");
 var mtnApiKey = Environment.GetEnvironmentVariable("MTN_API_KEY");
 var mtnSubscriptionKey = Environment.GetEnvironmentVariable("MTN_SUBSCRIPTION_KEY");
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 //--------- REMOVE THIS BLOCK FOR RAILWAY -------------
 // 🔒 Force SQL Server (ignore DATABASE_URL for now)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// ✅ Choose DB depending on environment
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+if (!string.IsNullOrEmpty(databaseUrl))
+{
+    // ☁️ Railway (PostgreSQL)
+    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(connectionString));
 
+    Console.WriteLine("☁️ Using PostgreSQL (Railway)");
+}
+else
+{
+    // 💻 Local SQL Server (from appsettings.json)
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlServer(connectionString));
 
-//UMCOMMEMET FOR RAILWAY
-//if (!string.IsNullOrEmpty(databaseUrl))
-//{
-//    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//        options.UseNpgsql(connectionString));
-//}
-//else
-//{
-//    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-//    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//        options.UseSqlServer(connectionString));
-//}
+    Console.WriteLine("💻 Using SQL Server (local)");
+}
 
 
 builder.Services.Configure<EmailSettings>(options =>
