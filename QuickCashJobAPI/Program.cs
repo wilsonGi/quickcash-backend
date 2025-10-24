@@ -223,6 +223,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
+                "https://jobs.splxit.com",               // ✅ Your live Firebase custom domain
                 "https://quickcashjob.web.app",
                 "https://quickcashjob.firebaseapp.com",
                 "https://quickcash-backend-production.up.railway.app", // ✅ add backend domain
