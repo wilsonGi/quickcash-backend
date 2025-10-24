@@ -219,11 +219,23 @@ builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", builder =>
+    options.AddPolicy("AllowFlutterWebApp", policy =>
     {
-        builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        policy
+            .WithOrigins(
+                "https://quickcashjob.web.app",
+                "https://quickcashjob.firebaseapp.com",
+                "https://quickcash-backend-production.up.railway.app", // ✅ add backend domain
+                "http://localhost:5000",
+                "http://localhost:51234",
+                "http://localhost:5271"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
+
 
 // Firebase setup
 var firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "keys", "serviceAccountKey.json");
@@ -244,6 +256,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseRouting();
+app.UseCors("AllowFlutterWebApp");
 app.UseStaticFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -251,7 +265,6 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/uploads"
 });
 
-app.UseCors("AllowAll");
 app.UseMiddleware<SubscriptionMiddleware>();
 if (!app.Environment.IsDevelopment())
 {
