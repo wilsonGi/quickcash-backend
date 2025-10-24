@@ -250,30 +250,40 @@ builder.WebHost.UseUrls($"http://*:{port}");
 
 var app = builder.Build();
 
+// ✅ Swagger (optional, only in development)
+// ✅ Swagger only for local development
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseRouting();
-app.UseCors("AllowFlutterWebApp");
+// ✅ Always redirect HTTP → HTTPS (important for Railway)
+app.UseHttpsRedirection();
+
+// ✅ Serve static files (images, uploads, etc.)
 app.UseStaticFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
     RequestPath = "/uploads"
 });
 
-app.UseMiddleware<SubscriptionMiddleware>();
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+// ✅ Routing must come before CORS, auth, etc.
+app.UseRouting();
 
+// ✅ Enable CORS for Flutter (Firebase hosting)
+app.UseCors("AllowFlutterWebApp");
+
+// ✅ Security middlewares
 app.UseAuthentication();
 app.UseAuthorization();
 
+// ✅ Custom middleware (runs after user is authenticated)
+app.UseMiddleware<SubscriptionMiddleware>();
+
+// ✅ Map your endpoints after everything else
 app.MapControllers();
 app.MapHub<NotificationHub>("/notificationHub");
 
