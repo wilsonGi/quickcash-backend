@@ -64,26 +64,35 @@ var mtnSubscriptionKey = Environment.GetEnvironmentVariable("MTN_SUBSCRIPTION_KE
 //--------- REMOVE THIS BLOCK FOR RAILWAY -------------
 // 🔒 Force SQL Server (ignore DATABASE_URL for now)
 // ✅ Choose DB depending on environment
+// ✅ Database Setup (works both locally and on Railway)
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+string connectionString;
 
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // ☁️ Railway (PostgreSQL)
-    var connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(connectionString));
+    try
+    {
+        connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+        Console.WriteLine($"☁️ Using PostgreSQL (Railway)\n{connectionString}");
 
-    Console.WriteLine("☁️ Using PostgreSQL (Railway)");
+        builder.Services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseNpgsql(connectionString));
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Failed to parse DATABASE_URL: {ex.Message}");
+        throw;
+    }
 }
 else
 {
-    // 💻 Local SQL Server (from appsettings.json)
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    Console.WriteLine($"💻 Using SQL Server locally: {connectionString}");
+
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlServer(connectionString));
-
-    Console.WriteLine("💻 Using SQL Server (local)");
 }
+
 
 
 builder.Services.Configure<EmailSettings>(options =>
@@ -311,7 +320,25 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// ✅ Verify Database Connectivity (run this BEFORE app.Run)
+using (var testScope = app.Services.CreateScope())
+{
+    var db = testScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        if (await db.Database.CanConnectAsync())
+            Console.WriteLine("✅ Database connection successful!");
+        else
+            Console.WriteLine("⚠️ Database connection failed — check Railway Postgres configuration.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Cannot connect to database: {ex.Message}");
+    }
+}
+
 app.Run();
+
 
 static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
 {
