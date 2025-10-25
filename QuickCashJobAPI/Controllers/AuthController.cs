@@ -98,7 +98,13 @@ namespace QuickCashJobAPI.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during login attempt for {Email}", loginModel.Email);
-                return StatusCode(500, new { message = "An unexpected error occurred. Please try again later." });
+
+                // ⚠️ Temporary detailed error response (only for debugging)
+                return StatusCode(500, new
+                {
+                    message = ex.Message,
+                    stack = ex.StackTrace
+                });
             }
         }
 
