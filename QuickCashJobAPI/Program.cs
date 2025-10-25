@@ -65,7 +65,7 @@ var mtnSubscriptionKey = Environment.GetEnvironmentVariable("MTN_SUBSCRIPTION_KE
 // 🔒 Force SQL Server (ignore DATABASE_URL for now)
 // ✅ Choose DB depending on environment
 // ✅ Database Setup (works both locally and on Railway)
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL");
 string connectionString;
 
 if (!string.IsNullOrEmpty(databaseUrl))
