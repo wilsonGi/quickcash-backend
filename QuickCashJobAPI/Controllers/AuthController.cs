@@ -48,29 +48,40 @@ namespace QuickCashJobAPI.Controllers
             _signInManager = signInManager;
         }
 
-        // User Login Endpoint
+
+
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginModel loginModel)
         {
-            var user = await _userManager.FindByEmailAsync(loginModel.Email);
-            if (user != null && await _userManager.CheckPasswordAsync(user, loginModel.Password))
+            try
             {
-                var userRoles = await _userManager.GetRolesAsync(user);
-                var isAdmin = userRoles.Contains("Admin");
+                if (!ModelState.IsValid)
+                    return BadRequest(new { message = "Invalid login data." });
 
-                var isSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
-                var isApproved = user.IsApproved;
+                var user = await _userManager.FindByEmailAsync(loginModel.Email);
+                if (user == null || !await _userManager.CheckPasswordAsync(user, loginModel.Password))
+                {
+                    return Unauthorized(new { message = "Invalid email or password." });
+                }
 
                 if (!user.IsApproved)
                 {
                     return Unauthorized(new { message = "Your account has not been approved yet. Please wait for admin approval." });
                 }
 
+                var userRoles = await _userManager.GetRolesAsync(user);
+                var isAdmin = userRoles.Contains("Admin");
+                var isSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
+                var isApproved = user.IsApproved;
+
+                // Generate tokens
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
-                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // or 30 days
+                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
                 await _userManager.UpdateAsync(user);
+
                 var token = GenerateJwtToken(user, isAdmin, isSubscriptionActive, isApproved);
+
                 return Ok(new
                 {
                     UserId = user.Id,
@@ -79,14 +90,16 @@ namespace QuickCashJobAPI.Controllers
                     RefreshTokenExpiry = user.RefreshTokenExpiryTime,
                     UserName = user.Name,
                     UserEmail = user.Email,
-                    IsAdmin = isAdmin, // Include admin flag in the response
+                    IsAdmin = isAdmin,
                     IsSubscriptionActive = isSubscriptionActive,
                     IsApproved = isApproved
-
                 });
             }
-
-            return Unauthorized(new { message = "Invalid email or password." });
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during login attempt for {Email}", loginModel.Email);
+                return StatusCode(500, new { message = "An unexpected error occurred. Please try again later." });
+            }
         }
 
 

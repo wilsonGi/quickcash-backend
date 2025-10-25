@@ -226,52 +226,57 @@ builder.Services.AddHostedService<SubscriptionCheckService>();
 builder.Services.AddScoped<SubscriptionService>();
 builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+//builder.Services.AddCors(options =>
+//{
+//    options.AddPolicy("AllowFlutterWebApp", policy =>
+//    {
+//        policy
+//            .WithOrigins(
+//                "https://jobs.splxit.com",              // ✅ your custom Firebase domain
+//                "https://quickcashjob.web.app",          // ✅ Firebase default hosting domain
+//                "https://quickcashjob.firebaseapp.com"   // ✅ secondary Firebase domain
+//            )
+//            .AllowAnyHeader()
+//            .AllowAnyMethod();
+//    });
+//});
+
+
 builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFlutterWebApp", policy =>
-    {
-        policy
-            .WithOrigins(
-                "https://jobs.splxit.com",               // ✅ Your live Firebase custom domain
-                "https://quickcashjob.web.app",
-                "https://quickcashjob.firebaseapp.com",
-                "https://quickcash-backend-production.up.railway.app", // ✅ add backend domain
-                "http://localhost:5000",
-                "http://localhost:51234",
-                "http://localhost:5271"
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
+{ 
+    options.AddPolicy("AllowAll", builder => 
+    { 
+        builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+    }); 
 });
 
 
-// Firebase setup
+
+
+
+
+
+// ✅ Firebase setup
 var firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "keys", "serviceAccountKey.json");
 FirebaseApp.Create(new AppOptions
 {
     Credential = GoogleCredential.FromFile(firebaseKeyPath)
 });
 
-// Optional: required for Railway free plan deployment
+// ✅ Railway port config
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://*:{port}");
 
 var app = builder.Build();
 
-// ✅ Swagger (optional, only in development)
-// ✅ Swagger only for local development
+// ✅ Swagger (only for local development)
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// ✅ Always redirect HTTP → HTTPS (important for Railway)
-app.UseHttpsRedirection();
-
-// ✅ Serve static files (images, uploads, etc.)
 app.UseStaticFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -280,24 +285,26 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/uploads"
 });
 
-// ✅ Routing must come before CORS, auth, etc.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseRouting();
 
-// ✅ Enable CORS for Flutter (Firebase hosting)
-app.UseCors("AllowFlutterWebApp");
+// ✅ move CORS AFTER routing and BEFORE authentication
+app.UseCors("AllowAll");
 
-// ✅ Security middlewares
+app.UseMiddleware<SubscriptionMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ✅ Custom middleware (runs after user is authenticated)
-app.UseMiddleware<SubscriptionMiddleware>();
 
-// ✅ Map your endpoints after everything else
+
 app.MapControllers();
 app.MapHub<NotificationHub>("/notificationHub");
 
-// ✅ Run DB migration + seeding with logging
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -320,7 +327,7 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// ✅ Verify Database Connectivity (run this BEFORE app.Run)
+// ✅ 9️⃣ Verify DB connection
 using (var testScope = app.Services.CreateScope())
 {
     var db = testScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
