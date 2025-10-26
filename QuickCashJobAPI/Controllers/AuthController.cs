@@ -405,32 +405,6 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-        private string GenerateJwtToken(ApplicationUser user)
-        {
-            var claims = new[]
-            {
-        new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-        new Claim(JwtRegisteredClaimNames.Email, user.Email),
-        new Claim("isAdmin", user.IsAdmin.ToString()),
-        new Claim("isApproved", user.IsApproved.ToString())
-    };
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var token = new JwtSecurityToken(
-                issuer: _configuration["Jwt:Issuer"],
-                audience: _configuration["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddDays(7),
-                signingCredentials: creds
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-
-
-
         public class DeregisterRequest
         {
             public string UserEmailOrPhone { get; set; }
