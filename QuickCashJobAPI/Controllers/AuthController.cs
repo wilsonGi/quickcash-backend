@@ -633,7 +633,7 @@ namespace QuickCashJobAPI.Controllers
             var jwtSettings = _configuration.GetSection("JWT");
 
             // ✅ Load secret from appsettings or environment
-            var secret = _configuration["JWT:Secret"] ?? Environment.GetEnvironmentVariable("JWT_SECRET");
+            var secret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? _configuration["JWT:Secret"];
             if (string.IsNullOrEmpty(secret))
                 throw new Exception("JWT secret is missing — check environment variables or appsettings.json.");
 
