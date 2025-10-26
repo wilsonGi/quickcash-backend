@@ -26,9 +26,10 @@ namespace QuickCashJobAPI.Data
             }
             else
             {
-                // ✅ Local SQL Server (matches Program.cs)
-                var connectionString = configuration.GetConnectionString("DefaultConnection");
-                optionsBuilder.UseSqlServer(connectionString);
+                // Fallback local connection string (SQL Server or local PostgreSQL)
+                var localConnectionString = configuration.GetConnectionString("DefaultConnection")
+                                            ?? "Server=localhost;Database=QuickCashDb;User Id=sa;Password=YourPassword;";
+                optionsBuilder.UseNpgsql(localConnectionString);
             }
 
             return new ApplicationDbContext(optionsBuilder.Options);

@@ -1,4 +1,6 @@
-﻿namespace QuickCashJobAPI.Models
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+namespace QuickCashJobAPI.Models
 {
     public class SubscriptionPlan
     {
@@ -8,6 +10,8 @@
         public decimal Amount { get; set; }
         public int DurationDays { get; set; } // e.g. 7 for trial, 30 for monthly
         public string Features { get; set; } // Comma-separated: "POST_JOB,VIEW_ADS"
+
+        [Column(TypeName = "boolean")]
         public bool IsActive { get; set; } = true;
     }
 

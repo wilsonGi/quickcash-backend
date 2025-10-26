@@ -338,7 +338,9 @@ namespace QuickCashJobAPI.Data
             Type = SubscriptionTier.FreeTrial,
             Amount = 0,
             DurationDays = 7,
-            Features = "VIEW_JOBS,POST_JOB_LIMIT_3,COMMIT_JOB_LIMIT_3,VIEW_AD_LIMIT_5,POST_AD_LIMIT_3"
+            Features = "VIEW_JOBS,POST_JOB_LIMIT_3,COMMIT_JOB_LIMIT_3,VIEW_AD_LIMIT_5,POST_AD_LIMIT_3",
+            IsActive = true
+
         },
         new SubscriptionPlan
         {
@@ -347,7 +349,9 @@ namespace QuickCashJobAPI.Data
             Type = SubscriptionTier.Subscribed,
             Amount = 100, // GHS or USD, your choice
             DurationDays = 30,
-            Features = "UNLIMITED_JOBS,UNLIMITED_ADS,VIEW_ALL_ADS,COMMIT_UNLIMITED"
+            Features = "UNLIMITED_JOBS,UNLIMITED_ADS,VIEW_ALL_ADS,COMMIT_UNLIMITED",
+            IsActive = true
+
         },
         new SubscriptionPlan
         {
@@ -356,7 +360,9 @@ namespace QuickCashJobAPI.Data
             Type = SubscriptionTier.PayAsYouGo,
             Amount = 0,
             DurationDays = 0,
-            Features = "PAY_PER_ACTION"
+            Features = "PAY_PER_ACTION",
+            IsActive = true
+
         },
         new SubscriptionPlan
         {
