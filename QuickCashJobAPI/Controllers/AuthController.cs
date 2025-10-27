@@ -450,7 +450,6 @@ namespace QuickCashJobAPI.Controllers
             return Ok(user);
         }
 
-
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
@@ -481,7 +480,7 @@ namespace QuickCashJobAPI.Controllers
 
                 if (user == null)
                 {
-                    // Prevent duplicates by device or email
+                    // Prevent duplicates by email or device
                     if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
                         return BadRequest(new { message = "A user with this email or device already exists." });
 
@@ -495,7 +494,7 @@ namespace QuickCashJobAPI.Controllers
                         IsApproved = false,
                         IsSubscriptionActive = false,
                         IsAdmin = false,
-                        TrialEndDate = DateTime.UtcNow.AddDays(7)
+                        TrialEndDate = DateTime.UtcNow.AddDays(30) // ✅ Match main registration trial period
                     };
 
                     var createResult = await _userManager.CreateAsync(user);
@@ -533,23 +532,29 @@ namespace QuickCashJobAPI.Controllers
                 if (!user.IsApproved)
                     return Unauthorized(new { message = "Your account is pending admin approval. Please wait for approval." });
 
-                // ✅ 4. Role and subscription logic
+                // ✅ 4. Handle trial and subscription expiration
+                if (user.TrialEndDate < DateTime.UtcNow)
+                {
+                    user.IsSubscriptionActive = false;
+                }
+                else
+                {
+                    user.IsSubscriptionActive = true;
+                }
+
+                // ✅ 5. Roles
                 var userRoles = await _userManager.GetRolesAsync(user);
                 var isAdmin = userRoles.Contains("Admin");
-                var isSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
-                var isApproved = user.IsApproved;
 
-                user.IsSubscriptionActive = isSubscriptionActive;
-
-                // ✅ 5. Generate refresh token and JWT
+                // ✅ 6. Generate refresh token & JWT
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
                 await _userManager.UpdateAsync(user);
 
-                var token = GenerateJwtToken(user, isAdmin, isSubscriptionActive, isApproved);
+                var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
 
-                // ✅ 6. Return identical structure
+                // ✅ 7. Return consistent structure
                 return Ok(new
                 {
                     UserId = user.Id,
@@ -559,8 +564,8 @@ namespace QuickCashJobAPI.Controllers
                     UserName = user.Name,
                     UserEmail = user.Email,
                     IsAdmin = isAdmin,
-                    IsSubscriptionActive = isSubscriptionActive,
-                    IsApproved = isApproved,
+                    IsSubscriptionActive = user.IsSubscriptionActive,
+                    IsApproved = user.IsApproved,
                     TrialEndDate = user.TrialEndDate
                 });
             }
