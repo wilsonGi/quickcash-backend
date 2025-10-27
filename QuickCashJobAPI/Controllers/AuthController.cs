@@ -449,6 +449,10 @@ namespace QuickCashJobAPI.Controllers
 
             return Ok(user);
         }
+
+
+
+
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
@@ -502,8 +506,8 @@ namespace QuickCashJobAPI.Controllers
                             UserName = email,
                             Email = email,
                             Name = name ?? "User",
-                            Location = "Unknown",
-                            PhoneNumber = "0000000000",
+                            Location = null, // <-- make nullable
+                            PhoneNumber = null, // <-- make nullable
                             DeviceId = model.DeviceId,
                             DateJoined = now,
                             IsApproved = true,
@@ -539,7 +543,7 @@ namespace QuickCashJobAPI.Controllers
                             await _db.SaveChangesAsync();
                         }
 
-                        // ✅ Send welcome + trial email (non-blocking)
+                        // ✅ Send welcome email
                         _ = Task.Run(async () =>
                         {
                             try
@@ -548,13 +552,13 @@ namespace QuickCashJobAPI.Controllers
                                     user.Email,
                                     "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
                                     $@"
-                        <html>
-                        <body style='font-family: Arial;'>
-                            <h2>Welcome, {user.Name}!</h2>
-                            <p>Your free trial ends on <b>{user.TrialEndDate:dddd, MMM dd, yyyy}</b>.</p>
-                            <p>Start exploring jobs at <a href='https://job.splxit.com'>job.splxit.com</a></p>
-                        </body>
-                        </html>"
+                            <html>
+                            <body style='font-family: Arial;'>
+                                <h2>Welcome, {user.Name}!</h2>
+                                <p>Your free trial ends on <b>{user.TrialEndDate:dddd, MMM dd, yyyy}</b>.</p>
+                                <p>Start exploring jobs at <a href='https://job.splxit.com'>job.splxit.com</a></p>
+                            </body>
+                            </html>"
                                 );
                             }
                             catch (Exception ex)
@@ -586,7 +590,10 @@ namespace QuickCashJobAPI.Controllers
 
                 var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
 
-                // ✅ 9. Response
+                // ✅ 9. Check if user must complete profile
+                bool needsProfileCompletion = string.IsNullOrEmpty(user.PhoneNumber) || string.IsNullOrEmpty(user.Location);
+
+                // ✅ 10. Return response
                 return Ok(new
                 {
                     UserId = user.Id,
@@ -598,7 +605,8 @@ namespace QuickCashJobAPI.Controllers
                     IsAdmin = isAdmin,
                     IsSubscriptionActive = user.IsSubscriptionActive,
                     IsApproved = user.IsApproved,
-                    TrialEndDate = user.TrialEndDate
+                    TrialEndDate = user.TrialEndDate,
+                    NeedsProfileCompletion = needsProfileCompletion // <-- Flutter checks this
                 });
             }
             catch (Exception ex)
