@@ -454,93 +454,104 @@ namespace QuickCashJobAPI.Controllers
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
-            ApplicationUser user = null;
-            string email = null;
-            string name = null;
-
-            // 1️⃣ Validate token per provider
-            if (model.Provider == "Google")
+            try
             {
-                var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
-                email = payload.Email;
-                name = payload.Name;
-            }
-            else if (model.Provider == "Apple")
-            {
-                // TODO: Add Apple validation later
-            }
-            else
-            {
-                return BadRequest(new { message = "Unsupported provider" });
-            }
+                ApplicationUser user = null;
+                string email = null;
+                string name = null;
 
-            // 2️⃣ Check if user exists
-            user = await _userManager.FindByEmailAsync(email);
-
-            if (user == null)
-            {
-                if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
-                    return BadRequest(new { message = "A user with this email or device already exists." });
-
-                user = new ApplicationUser
+                // ✅ 1. Validate provider token
+                if (model.Provider == "Google")
                 {
-                    Email = email,
-                    UserName = email,
-                    Name = name,
-                    DateJoined = DateTime.UtcNow,
-                    DeviceId = model.DeviceId,
-                    IsApproved = false,
-                    IsSubscriptionActive = false,
-                    IsAdmin = false,
-                    TrialEndDate = DateTime.UtcNow.AddDays(7) // Give trial after approval
-                };
-
-                var result = await _userManager.CreateAsync(user);
-                if (!result.Succeeded)
-                    return BadRequest(result.Errors);
-
-                // Optional: Notify user
-                try
-                {
-                    await _emailSender.SendEmailAsync(
-                        user.Email,
-                        "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
-                        $"<p>Dear {user.Name},</p><p>Your account is pending admin approval.</p>"
-                    );
+                    var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
+                    email = payload.Email;
+                    name = payload.Name;
                 }
-                catch (Exception ex)
+                else if (model.Provider == "Apple")
                 {
-                    _logger.LogWarning(ex, "Email send failed to {Email}", user.Email);
+                    return BadRequest(new { message = "Apple login not yet supported." });
                 }
+                else
+                {
+                    return BadRequest(new { message = "Unsupported provider." });
+                }
+
+                // ✅ 2. Find or create user
+                user = await _userManager.FindByEmailAsync(email);
+
+                if (user == null)
+                {
+                    if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
+                        return BadRequest(new { message = "A user with this email or device already exists." });
+
+                    user = new ApplicationUser
+                    {
+                        Email = email,
+                        UserName = email,
+                        Name = name,
+                        DateJoined = DateTime.UtcNow,
+                        DeviceId = model.DeviceId,
+                        IsApproved = false,
+                        IsSubscriptionActive = false,
+                        IsAdmin = false,
+                        TrialEndDate = DateTime.UtcNow.AddDays(7) // Give trial period
+                    };
+
+                    var createResult = await _userManager.CreateAsync(user);
+                    if (!createResult.Succeeded)
+                        return BadRequest(createResult.Errors);
+
+                    // ✅ Optional email notification
+                    try
+                    {
+                        await _emailSender.SendEmailAsync(
+                            user.Email,
+                            "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
+                            $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval.</p>"
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send email to {Email}", user.Email);
+                    }
+                }
+
+                // ✅ 3. Ensure approval
+                if (!user.IsApproved)
+                    return Unauthorized(new { message = "Your account is pending admin approval." });
+
+                // ✅ 4. Calculate subscription status
+                var isSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
+                user.IsSubscriptionActive = isSubscriptionActive;
+
+                // ✅ 5. Refresh token + JWT
+                var refreshToken = GenerateRefreshToken();
+                user.RefreshToken = refreshToken;
+                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+                await _userManager.UpdateAsync(user);
+
+                var jwtToken = GenerateJwtToken(user, user.IsAdmin, isSubscriptionActive, user.IsApproved);
+
+                // ✅ 6. Return identical fields as normal login
+                return Ok(new
+                {
+                    UserId = user.Id,
+                    Token = jwtToken,
+                    RefreshToken = refreshToken,
+                    RefreshTokenExpiry = user.RefreshTokenExpiryTime,
+                    UserName = user.Name,
+                    UserEmail = user.Email,
+                    IsAdmin = user.IsAdmin,
+                    IsApproved = user.IsApproved,
+                    IsSubscriptionActive = isSubscriptionActive,
+                    TrialEndDate = user.TrialEndDate
+                });
             }
-
-            // 3️⃣ Stop unapproved users
-            if (!user.IsApproved)
-                return Unauthorized(new { message = "Admin approval required." });
-
-            // 4️⃣ Refresh token setup
-            var refreshToken = GenerateRefreshToken();
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
-            await _userManager.UpdateAsync(user);
-
-            // 5️⃣ Generate JWT
-            var jwtToken = GenerateJwtToken(user, user.IsAdmin, user.IsSubscriptionActive, user.IsApproved);
-
-            // 6️⃣ Return same fields as normal login ✅
-            return Ok(new
+            catch (Exception ex)
             {
-                userId = user.Id,
-                token = jwtToken,
-                refreshToken,
-                refreshTokenExpiry = user.RefreshTokenExpiryTime,
-                userName = user.Name,
-                userEmail = user.Email,
-                isAdmin = user.IsAdmin,
-                isApproved = user.IsApproved,
-                isSubscriptionActive = user.IsSubscriptionActive,
-                trialEndDate = user.TrialEndDate
-            });
+                _logger.LogError(ex, "Social login failed for provider {Provider}", model.Provider);
+                return StatusCode(500, new { message = "Social login failed.", details = ex.Message });
+            }
         }
 
 
