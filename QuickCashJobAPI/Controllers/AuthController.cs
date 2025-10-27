@@ -151,7 +151,7 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-        // ✅ USER REGISTRATION ENDPOINT
+        // ✅ USER REGISTRATION ENDPOINT (Optimized)
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromForm] RegisterModel registerModel)
         {
@@ -165,40 +165,54 @@ namespace QuickCashJobAPI.Controllers
                     return BadRequest(new { message = errorMessages });
                 }
 
-                // 🔹 Check for duplicate email, phone, and device
-                if (await _userManager.FindByEmailAsync(registerModel.Email) != null)
+                // ✅ Preload read-only queries with AsNoTracking()
+                var emailExists = await _db.Users
+                    .AsNoTracking()
+                    .AnyAsync(u => u.Email == registerModel.Email);
+
+                if (emailExists)
                     return BadRequest(new { message = "This email is already registered." });
 
-                if (_userManager.Users.Any(u => u.PhoneNumber == registerModel.PhoneNumber))
+                var phoneExists = await _db.Users
+                    .AsNoTracking()
+                    .AnyAsync(u => u.PhoneNumber == registerModel.PhoneNumber);
+
+                if (phoneExists)
                     return BadRequest(new { message = "This phone number is already registered." });
 
-                if (_userManager.Users.Any(u => u.DeviceId == registerModel.DeviceId))
+                var deviceExists = await _db.Users
+                    .AsNoTracking()
+                    .AnyAsync(u => u.DeviceId == registerModel.DeviceId);
+
+                if (deviceExists)
                     return BadRequest(new { message = "Registration from this device is already used." });
 
-                // 🔹 Check if user already used trial
-                bool hasTrialBefore = await _db.TrialRecords.AnyAsync(r =>
-                    r.Email == registerModel.Email ||
-                    r.PhoneNumber == registerModel.PhoneNumber ||
-                    r.DeviceId == registerModel.DeviceId);
+                // ✅ Trial check (fast if indexes exist)
+                bool hasTrialBefore = await _db.TrialRecords
+                    .AsNoTracking()
+                    .AnyAsync(r =>
+                        r.Email == registerModel.Email ||
+                        r.PhoneNumber == registerModel.PhoneNumber ||
+                        r.DeviceId == registerModel.DeviceId);
 
                 if (hasTrialBefore)
                 {
                     return BadRequest(new { message = "You have already used a free trial. Please subscribe or choose PAYG." });
                 }
 
-                // 🔹 Validate profile photo
+                // ✅ Validate profile photo (simple)
                 if (registerModel.ProfilePhoto != null)
                 {
                     if (registerModel.ProfilePhoto.Length > 5 * 1024 * 1024)
                         return BadRequest(new { message = "File size too large. Max allowed size is 5MB" });
 
                     var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
-                    var fileExtension = Path.GetExtension(registerModel.ProfilePhoto.FileName);
-                    if (!allowedExtensions.Contains(fileExtension.ToLower()))
+                    var fileExtension = Path.GetExtension(registerModel.ProfilePhoto.FileName).ToLower();
+                    if (!allowedExtensions.Contains(fileExtension))
                         return BadRequest(new { message = "Invalid file type. Only JPG, JPEG, and PNG are allowed." });
                 }
 
-                // ✅ Create user with *no active subscription* yet
+                // ✅ Create user
                 var user = new ApplicationUser
                 {
                     UserName = registerModel.Email,
@@ -213,7 +227,7 @@ namespace QuickCashJobAPI.Controllers
                     LastTaskEmployedDate = DateTime.SpecifyKind(registerModel.LastTaskEmployedDate, DateTimeKind.Utc),
                     DateJoined = DateTime.SpecifyKind(registerModel.DateJoined, DateTimeKind.Utc),
 
-                    // 🚫 Trial and subscription not yet active
+                    // 🚫 Not approved yet
                     IsAdmin = false,
                     IsApproved = false,
                     IsSubscriptionActive = false,
@@ -225,9 +239,12 @@ namespace QuickCashJobAPI.Controllers
 
                 var result = await _userManager.CreateAsync(user, registerModel.Password);
                 if (!result.Succeeded)
-                    return BadRequest(result.Errors);
+                {
+                    var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                    return BadRequest(new { message = errors });
+                }
 
-                // 🔹 Process profile photo
+                // ✅ Handle photo after user creation
                 if (registerModel.ProfilePhoto != null)
                 {
                     using var memoryStream = new MemoryStream();
@@ -236,30 +253,32 @@ namespace QuickCashJobAPI.Controllers
                     await _userManager.UpdateAsync(user);
                 }
 
-                // 🔹 Assign role
+                // ✅ Assign role
                 var role = registerModel.IsAdmin ? "Admin" : "Customer";
                 await _userManager.AddToRoleAsync(user, role);
 
-                // 🔹 Send registration email (pending approval)
-                try
+                // ✅ Send email asynchronously (doesn't block)
+                _ = Task.Run(async () =>
                 {
-                    await _emailSender.SendEmailAsync(
-                    user.Email,
-                    "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
-                    $@"
+                    try
+                    {
+                        await _emailSender.SendEmailAsync(
+                            user.Email,
+                            "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
+                            $@"
                     <p>Dear {user.Name},</p>
                     <p>Thank you for registering with <strong>Splxit Jobs</strong>!</p>
                     <p>Your account has been successfully created and is currently <strong>pending admin approval</strong>.</p>
-                    <p>Once approved, you’ll receive an email confirming activation of your <strong>7-day free trial</strong> period.</p>
-                    <p>We’re excited to have you on board and can’t wait for you to start exploring opportunities on our platform.</p>
+                    <p>Once approved, you’ll receive an email confirming activation of your <strong>free trial</strong>.</p>
                     <p>Warm regards,<br><strong>The Splxit Jobs Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
                     "
-                );
-                }
-                catch (Exception emailEx)
-                {
-                    _logger.LogWarning(emailEx, "Failed to send registration email to {Email}", user.Email);
-                }
+                        );
+                    }
+                    catch (Exception emailEx)
+                    {
+                        _logger.LogWarning(emailEx, "Failed to send registration email to {Email}", user.Email);
+                    }
+                });
 
                 return Ok(new { message = "User registered successfully, pending approval." });
             }
@@ -269,6 +288,129 @@ namespace QuickCashJobAPI.Controllers
                 return StatusCode(500, new { message = ex.Message });
             }
         }
+
+
+
+
+        // ✅ USER REGISTRATION ENDPOINT
+        //[HttpPost("register")]
+        //public async Task<IActionResult> Register([FromForm] RegisterModel registerModel)
+        //{
+        //    try
+        //    {
+        //        if (!ModelState.IsValid)
+        //        {
+        //            var errorMessages = string.Join("; ", ModelState.Values
+        //                .SelectMany(x => x.Errors)
+        //                .Select(x => x.ErrorMessage));
+        //            return BadRequest(new { message = errorMessages });
+        //        }
+
+        //        // 🔹 Check for duplicate email, phone, and device
+        //        if (await _userManager.FindByEmailAsync(registerModel.Email) != null)
+        //            return BadRequest(new { message = "This email is already registered." });
+
+        //        if (_userManager.Users.Any(u => u.PhoneNumber == registerModel.PhoneNumber))
+        //            return BadRequest(new { message = "This phone number is already registered." });
+
+        //        if (_userManager.Users.Any(u => u.DeviceId == registerModel.DeviceId))
+        //            return BadRequest(new { message = "Registration from this device is already used." });
+
+        //        // 🔹 Check if user already used trial
+        //        bool hasTrialBefore = await _db.TrialRecords.AnyAsync(r =>
+        //            r.Email == registerModel.Email ||
+        //            r.PhoneNumber == registerModel.PhoneNumber ||
+        //            r.DeviceId == registerModel.DeviceId);
+
+        //        if (hasTrialBefore)
+        //        {
+        //            return BadRequest(new { message = "You have already used a free trial. Please subscribe or choose PAYG." });
+        //        }
+
+        //        // 🔹 Validate profile photo
+        //        if (registerModel.ProfilePhoto != null)
+        //        {
+        //            if (registerModel.ProfilePhoto.Length > 5 * 1024 * 1024)
+        //                return BadRequest(new { message = "File size too large. Max allowed size is 5MB" });
+
+        //            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+        //            var fileExtension = Path.GetExtension(registerModel.ProfilePhoto.FileName);
+        //            if (!allowedExtensions.Contains(fileExtension.ToLower()))
+        //                return BadRequest(new { message = "Invalid file type. Only JPG, JPEG, and PNG are allowed." });
+        //        }
+
+        //        // ✅ Create user with *no active subscription* yet
+        //        var user = new ApplicationUser
+        //        {
+        //            UserName = registerModel.Email,
+        //            Email = registerModel.Email,
+        //            Name = registerModel.Name,
+        //            Location = registerModel.Location,
+        //            PhoneNumber = registerModel.PhoneNumber,
+        //            DeviceId = registerModel.DeviceId,
+        //            NumberOfTasksCompleted = 0,
+        //            NumberOfTasksEmployed = 0,
+        //            LastTaskDoneDate = DateTime.SpecifyKind(registerModel.LastTaskDoneDate, DateTimeKind.Utc),
+        //            LastTaskEmployedDate = DateTime.SpecifyKind(registerModel.LastTaskEmployedDate, DateTimeKind.Utc),
+        //            DateJoined = DateTime.SpecifyKind(registerModel.DateJoined, DateTimeKind.Utc),
+
+        //            // 🚫 Trial and subscription not yet active
+        //            IsAdmin = false,
+        //            IsApproved = false,
+        //            IsSubscriptionActive = false,
+        //            CurrentPlanId = null,
+        //            TrialEndDate = DateTime.MinValue,
+        //            SubscriptionStartDate = null,
+        //            SubscriptionEndDate = null
+        //        };
+
+        //        var result = await _userManager.CreateAsync(user, registerModel.Password);
+        //        if (!result.Succeeded)
+        //            return BadRequest(result.Errors);
+
+        //        // 🔹 Process profile photo
+        //        if (registerModel.ProfilePhoto != null)
+        //        {
+        //            using var memoryStream = new MemoryStream();
+        //            await registerModel.ProfilePhoto.CopyToAsync(memoryStream);
+        //            user.ProfilePhoto = memoryStream.ToArray();
+        //            await _userManager.UpdateAsync(user);
+        //        }
+
+        //        // 🔹 Assign role
+        //        var role = registerModel.IsAdmin ? "Admin" : "Customer";
+        //        await _userManager.AddToRoleAsync(user, role);
+
+        //        // 🔹 Send registration email (pending approval)
+        //        try
+        //        {
+        //            await _emailSender.SendEmailAsync(
+        //            user.Email,
+        //            "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
+        //            $@"
+        //            <p>Dear {user.Name},</p>
+        //            <p>Thank you for registering with <strong>Splxit Jobs</strong>!</p>
+        //            <p>Your account has been successfully created and is currently <strong>pending admin approval</strong>.</p>
+        //            <p>Once approved, you’ll receive an email confirming activation of your <strong>7-day free trial</strong> period.</p>
+        //            <p>We’re excited to have you on board and can’t wait for you to start exploring opportunities on our platform.</p>
+        //            <p>Warm regards,<br><strong>The Splxit Jobs Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
+        //            "
+        //        );
+        //        }
+        //        catch (Exception emailEx)
+        //        {
+        //            _logger.LogWarning(emailEx, "Failed to send registration email to {Email}", user.Email);
+        //        }
+
+        //        return Ok(new { message = "User registered successfully, pending approval." });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error during registration.");
+        //        return StatusCode(500, new { message = ex.Message });
+        //    }
+        //}
+
 
 
 

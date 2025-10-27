@@ -141,127 +141,89 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-        // ✅ APPROVE USER ENDPOINT
         [HttpPost("ApproveUser/{userId}")]
         public async Task<IActionResult> ApproveUser(string userId)
         {
             try
             {
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                {
-                    _logger.LogWarning("ApproveUser failed: No user found with ID {UserId}", userId);
-                    return NotFound(new { message = "User not found." });
-                }
-
-                if (user.IsApproved)
-                {
-                    _logger.LogInformation("User {Email} is already approved.", user.Email);
-                    return BadRequest(new { message = "User is already approved." });
-                }
-
-                // ✅ Fetch trial plan
-                var trialPlan = await _context.SubscriptionPlans
+                // ✅ Fetch user + FreeTrial plan in parallel
+                var userTask = _userManager.FindByIdAsync(userId);
+                var planTask = _context.SubscriptionPlans
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
 
-                if (trialPlan == null)
-                    return StatusCode(500, new { message = "Trial subscription plan not configured. Please contact support." });
+                await Task.WhenAll(userTask, planTask);
 
-                // ✅ Activate user and start trial
+                var user = userTask.Result;
+                var trialPlan = planTask.Result;
+
+                if (user == null)
+                    return NotFound(new { message = "User not found." });
+
+                if (user.IsApproved)
+                    return BadRequest(new { message = "User is already approved." });
+
+                if (trialPlan == null)
+                    return StatusCode(500, new { message = "Trial plan not configured." });
+
+                // ✅ Activate trial properly (fix for expired issue)
+                var now = DateTime.UtcNow;
                 user.IsApproved = true;
                 user.IsSubscriptionActive = true;
                 user.CurrentPlanId = trialPlan.Id;
-                user.SubscriptionStartDate = DateTime.UtcNow;
-                user.SubscriptionEndDate = DateTime.UtcNow.AddDays(7);
-                user.TrialEndDate = DateTime.UtcNow.AddDays(7);
+                user.SubscriptionStartDate = now;
+                user.SubscriptionEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7);
+                user.TrialEndDate = user.SubscriptionEndDate!.Value;
 
-                // Ensure essential fields are valid
-                user.LastTaskDoneDate = user.LastTaskDoneDate == default
-                    ? DateTime.UtcNow
-                    : user.LastTaskDoneDate;
-                user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
-                    ? DateTime.UtcNow
-                    : user.LastTaskEmployedDate;
-                user.DateJoined = user.DateJoined == default
-                    ? DateTime.UtcNow
-                    : user.DateJoined;
+                user.LastTaskDoneDate = user.LastTaskDoneDate == default ? now : user.LastTaskDoneDate;
+                user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? now : user.LastTaskEmployedDate;
+                user.DateJoined = user.DateJoined == default ? now : user.DateJoined;
 
-                if (string.IsNullOrEmpty(user.Name)) user.Name = "User";
-                if (string.IsNullOrEmpty(user.Location)) user.Location = "Unknown";
+                user.Name ??= "User";
+                user.Location ??= "Unknown";
 
-                // ✅ Save trial record permanently
-                _context.TrialRecords.Add(new TrialRecord
+                // ✅ Insert trial record (ignore duplicates)
+                if (!_context.TrialRecords.Any(r => r.Email == user.Email))
                 {
-                    Email = user.Email,
-                    PhoneNumber = user.PhoneNumber,
-                    DeviceId = user.DeviceId
-                });
+                    _context.TrialRecords.Add(new TrialRecord
+                    {
+                        Email = user.Email,
+                        PhoneNumber = user.PhoneNumber,
+                        DeviceId = user.DeviceId
+                    });
+                }
 
-                await _userManager.UpdateAsync(user);
+                // ✅ Batch update (faster)
                 await _context.SaveChangesAsync();
 
-                // ✅ Send approval + activation email
-                // ✅ Send detailed welcome + educational email after approval
-                try
+                // ✅ Update IdentityUser (sync in one go)
+                await _userManager.UpdateAsync(user);
+
+                // ⚡ Fire-and-forget email to avoid slowing request
+                _ = Task.Run(async () =>
                 {
-                    await _emailSender.SendEmailAsync(
-                        user.Email,
-                        "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
-                        $@"
-        <html>
-        <body style='font-family: Arial, sans-serif; color: #333;'>
-            <h2 style='color: #2d89ef;'>Welcome to Splxit Jobs, {user.Name}!</h2>
-            <p>Your account has been <strong>approved</strong> 🎉</p>
-            <p>Your 7-day <strong>free trial</strong> has begun and will end on <strong>{user.TrialEndDate:dddd, MMM dd, yyyy}</strong>.</p>
+                    try
+                    {
+                        await _emailSender.SendEmailAsync(
+                            user.Email,
+                            "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
+                            $@"
+                    <html>
+                    <body style='font-family: Arial;'>
+                        <h2>Welcome, {user.Name}!</h2>
+                        <p>Your free trial ends on <b>{user.TrialEndDate:dddd, MMM dd, yyyy}</b>.</p>
+                        <p>Start exploring jobs at <a href='https://job.splxit.com'>job.splxit.com</a></p>
+                    </body>
+                    </html>"
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send email to {Email}", user.Email);
+                    }
+                });
 
-            <hr>
-
-            <h3>🌍 What We Do at Splxit Jobs</h3>
-
-            <p><strong>1. The Job Completion Cycle on Splxit Jobs</strong><br>
-            Splxit Jobs makes job posting and completion easy and transparent. A user posts a job, another commits to it, and the poster approves. Once the contractor confirms and completes the job, both parties gain credibility with improved ratings and job counts. This cycle ensures accountability, fairness, and trust between job creators and job seekers.</p>
-
-            <p><strong>2. Why Everyone Wins on Splxit Jobs</strong><br>
-            On Splxit Jobs, both the job poster and the job provider benefit. Posters get their tasks done quickly, while contractors earn income. At the end of each completed job, both sides see their ratings improve and their credibility increase. The more jobs you complete or post, the stronger your reputation becomes on the platform.</p>
-
-            <p><strong>3. Commit, Approve, Confirm – How Jobs Get Done</strong><br>
-            When you see a job you like on Splxit Jobs, click “Commit.” The job poster reviews all who committed and approves just one contractor. Once approved, you confirm, complete the job, and both sides win. This three-step process (Commit → Approve → Confirm) keeps the system fair and efficient.</p>
-
-            <p><strong>4. Small Jobs Matter Too!</strong><br>
-            Don’t feel shy to post small tasks. On Splxit Jobs, you can post anything from watering flowers, washing a car, to walking a dog, even if you’re paying just GHC10. Every job matters because it puts money in someone’s pocket and helps you get things done. No job is too small.</p>
-
-            <p><strong>5. Your Dashboard, Your Control</strong><br>
-            On your Splxit Jobs dashboard, you can track all your jobs. Filter jobs by status—active, inactive, committed, approved, confirmed, or completed. See how many people viewed your job, approve contractors, and manage your work from one place. It’s your control center for all activities.</p>
-
-            <p><strong>6. Building Trust Through Ratings</strong><br>
-            Every time you complete a job, your rating goes up. Job seekers get a percentage boost, and job posters build credibility by completing tasks successfully. The more jobs you do, the higher your profile credibility. Trust is earned, and Splxit Jobs helps you build it with every completed task.</p>
-
-            <p><strong>7. Anonymity and Privacy First</strong><br>
-            We understand the need for privacy. On Splxit Jobs, your phone number is hidden by default when posting jobs. You can choose to show it or keep it private. Instead, use the built-in chat to collaborate with contractors safely and conveniently.</p>
-
-            <p><strong>8. Advertise Your Skills and Services</strong><br>
-            Splxit Jobs is not just about posting jobs—it’s about showcasing what you can do. Add your skills to your profile and update them regularly. Whether you’re a plumber, graphic designer, cleaner, or tutor, your skills make you visible to those who need your services.</p>
-
-            <p><strong>9. Multiple Contractors, One Approval</strong><br>
-            When you post a job, multiple people may commit to it. You’ll see all their details, but you can approve only one contractor. If the approved contractor delays or refuses to confirm, you can disapprove them and choose someone else. This system ensures flexibility without compromising trust.</p>
-
-            <p><strong>10. The Purpose of Splxit Jobs</strong><br>
-            Splxit Jobs exists to solve one problem: no one should go hungry or broke. By allowing people to post tasks and get them done for money—no matter how small—we create daily, weekly, and instant earning opportunities. Whether you’re seeking work or needing a service, Splxit Jobs connects you quickly.</p>
-
-            <hr>
-            <p>Welcome aboard! You can now explore opportunities at <a href='https://job.splxit.com'>job.splxit.com</a>.</p>
-            <p style='font-size: 12px; color: #777;'>This message was sent from no-reply@job.splxit.com</p>
-        </body>
-        </html>");
-                }
-                catch (Exception emailEx)
-                {
-                    _logger.LogWarning(emailEx, "Failed to send approval email to {Email}", user.Email);
-                }
-
-
-                _logger.LogInformation("User {Email} approved successfully.", user.Email);
-                return Ok(new { message = "User approved successfully and trial activated." });
+                return Ok(new { message = "✅ User approved successfully and trial activated." });
             }
             catch (Exception ex)
             {
@@ -269,6 +231,140 @@ namespace QuickCashJobAPI.Controllers
                 return StatusCode(500, new { message = $"Unexpected error: {ex.Message}" });
             }
         }
+
+
+
+
+
+
+        // ✅ APPROVE USER ENDPOINT
+        //[HttpPost("ApproveUser/{userId}")]
+        //public async Task<IActionResult> ApproveUser(string userId)
+        //{
+        //    try
+        //    {
+        //        var user = await _userManager.FindByIdAsync(userId);
+        //        if (user == null)
+        //        {
+        //            _logger.LogWarning("ApproveUser failed: No user found with ID {UserId}", userId);
+        //            return NotFound(new { message = "User not found." });
+        //        }
+
+        //        if (user.IsApproved)
+        //        {
+        //            _logger.LogInformation("User {Email} is already approved.", user.Email);
+        //            return BadRequest(new { message = "User is already approved." });
+        //        }
+
+        //        // ✅ Fetch trial plan
+        //        var trialPlan = await _context.SubscriptionPlans
+        //            .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
+
+        //        if (trialPlan == null)
+        //            return StatusCode(500, new { message = "Trial subscription plan not configured. Please contact support." });
+
+        //        // ✅ Activate user and start trial
+        //        user.IsApproved = true;
+        //        user.IsSubscriptionActive = true;
+        //        user.CurrentPlanId = trialPlan.Id;
+        //        user.SubscriptionStartDate = DateTime.UtcNow;
+        //        user.SubscriptionEndDate = DateTime.UtcNow.AddDays(7);
+        //        user.TrialEndDate = DateTime.UtcNow.AddDays(7);
+
+        //        // Ensure essential fields are valid
+        //        user.LastTaskDoneDate = user.LastTaskDoneDate == default
+        //            ? DateTime.UtcNow
+        //            : user.LastTaskDoneDate;
+        //        user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
+        //            ? DateTime.UtcNow
+        //            : user.LastTaskEmployedDate;
+        //        user.DateJoined = user.DateJoined == default
+        //            ? DateTime.UtcNow
+        //            : user.DateJoined;
+
+        //        if (string.IsNullOrEmpty(user.Name)) user.Name = "User";
+        //        if (string.IsNullOrEmpty(user.Location)) user.Location = "Unknown";
+
+        //        // ✅ Save trial record permanently
+        //        _context.TrialRecords.Add(new TrialRecord
+        //        {
+        //            Email = user.Email,
+        //            PhoneNumber = user.PhoneNumber,
+        //            DeviceId = user.DeviceId
+        //        });
+
+        //        await _userManager.UpdateAsync(user);
+        //        await _context.SaveChangesAsync();
+
+        //        // ✅ Send approval + activation email
+        //        // ✅ Send detailed welcome + educational email after approval
+        //        try
+        //        {
+        //            await _emailSender.SendEmailAsync(
+        //                user.Email,
+        //                "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
+        //                $@"
+        //<html>
+        //<body style='font-family: Arial, sans-serif; color: #333;'>
+        //    <h2 style='color: #2d89ef;'>Welcome to Splxit Jobs, {user.Name}!</h2>
+        //    <p>Your account has been <strong>approved</strong> 🎉</p>
+        //    <p>Your 7-day <strong>free trial</strong> has begun and will end on <strong>{user.TrialEndDate:dddd, MMM dd, yyyy}</strong>.</p>
+
+        //    <hr>
+
+        //    <h3>🌍 What We Do at Splxit Jobs</h3>
+
+        //    <p><strong>1. The Job Completion Cycle on Splxit Jobs</strong><br>
+        //    Splxit Jobs makes job posting and completion easy and transparent. A user posts a job, another commits to it, and the poster approves. Once the contractor confirms and completes the job, both parties gain credibility with improved ratings and job counts. This cycle ensures accountability, fairness, and trust between job creators and job seekers.</p>
+
+        //    <p><strong>2. Why Everyone Wins on Splxit Jobs</strong><br>
+        //    On Splxit Jobs, both the job poster and the job provider benefit. Posters get their tasks done quickly, while contractors earn income. At the end of each completed job, both sides see their ratings improve and their credibility increase. The more jobs you complete or post, the stronger your reputation becomes on the platform.</p>
+
+        //    <p><strong>3. Commit, Approve, Confirm – How Jobs Get Done</strong><br>
+        //    When you see a job you like on Splxit Jobs, click “Commit.” The job poster reviews all who committed and approves just one contractor. Once approved, you confirm, complete the job, and both sides win. This three-step process (Commit → Approve → Confirm) keeps the system fair and efficient.</p>
+
+        //    <p><strong>4. Small Jobs Matter Too!</strong><br>
+        //    Don’t feel shy to post small tasks. On Splxit Jobs, you can post anything from watering flowers, washing a car, to walking a dog, even if you’re paying just GHC10. Every job matters because it puts money in someone’s pocket and helps you get things done. No job is too small.</p>
+
+        //    <p><strong>5. Your Dashboard, Your Control</strong><br>
+        //    On your Splxit Jobs dashboard, you can track all your jobs. Filter jobs by status—active, inactive, committed, approved, confirmed, or completed. See how many people viewed your job, approve contractors, and manage your work from one place. It’s your control center for all activities.</p>
+
+        //    <p><strong>6. Building Trust Through Ratings</strong><br>
+        //    Every time you complete a job, your rating goes up. Job seekers get a percentage boost, and job posters build credibility by completing tasks successfully. The more jobs you do, the higher your profile credibility. Trust is earned, and Splxit Jobs helps you build it with every completed task.</p>
+
+        //    <p><strong>7. Anonymity and Privacy First</strong><br>
+        //    We understand the need for privacy. On Splxit Jobs, your phone number is hidden by default when posting jobs. You can choose to show it or keep it private. Instead, use the built-in chat to collaborate with contractors safely and conveniently.</p>
+
+        //    <p><strong>8. Advertise Your Skills and Services</strong><br>
+        //    Splxit Jobs is not just about posting jobs—it’s about showcasing what you can do. Add your skills to your profile and update them regularly. Whether you’re a plumber, graphic designer, cleaner, or tutor, your skills make you visible to those who need your services.</p>
+
+        //    <p><strong>9. Multiple Contractors, One Approval</strong><br>
+        //    When you post a job, multiple people may commit to it. You’ll see all their details, but you can approve only one contractor. If the approved contractor delays or refuses to confirm, you can disapprove them and choose someone else. This system ensures flexibility without compromising trust.</p>
+
+        //    <p><strong>10. The Purpose of Splxit Jobs</strong><br>
+        //    Splxit Jobs exists to solve one problem: no one should go hungry or broke. By allowing people to post tasks and get them done for money—no matter how small—we create daily, weekly, and instant earning opportunities. Whether you’re seeking work or needing a service, Splxit Jobs connects you quickly.</p>
+
+        //    <hr>
+        //    <p>Welcome aboard! You can now explore opportunities at <a href='https://job.splxit.com'>job.splxit.com</a>.</p>
+        //    <p style='font-size: 12px; color: #777;'>This message was sent from no-reply@job.splxit.com</p>
+        //</body>
+        //</html>");
+        //        }
+        //        catch (Exception emailEx)
+        //        {
+        //            _logger.LogWarning(emailEx, "Failed to send approval email to {Email}", user.Email);
+        //        }
+
+
+        //        _logger.LogInformation("User {Email} approved successfully.", user.Email);
+        //        return Ok(new { message = "User approved successfully and trial activated." });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogCritical(ex, "Critical error in ApproveUser for userId: {UserId}", userId);
+        //        return StatusCode(500, new { message = $"Unexpected error: {ex.Message}" });
+        //    }
+        //}
 
 
         [HttpPost("DisapproveUser/{userId}")]
