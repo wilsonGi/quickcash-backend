@@ -450,7 +450,6 @@ namespace QuickCashJobAPI.Controllers
             return Ok(user);
         }
 
-
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
@@ -463,7 +462,7 @@ namespace QuickCashJobAPI.Controllers
                 string name = null;
                 string providerKey = null;
 
-                // ✅ 1. Validate provider token
+                // ✅ 1. Validate token by provider
                 if (model.Provider == "Google")
                 {
                     var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
@@ -471,40 +470,33 @@ namespace QuickCashJobAPI.Controllers
                     name = payload.Name;
                     providerKey = payload.Subject; // Google unique user ID
                 }
-                else if (model.Provider == "Apple")
-                {
-                    return BadRequest(new { message = "Apple login not yet supported." });
-                }
                 else
                 {
                     return BadRequest(new { message = "Unsupported provider." });
                 }
 
-                // ✅ 2. Try to find linked social login
-                var existingUser = await _userManager.FindByLoginAsync(model.Provider, providerKey);
-                ApplicationUser user;
+                var loginInfo = new UserLoginInfo(model.Provider, providerKey, model.Provider);
 
-                if (existingUser != null)
+                // ✅ 2. Check if already linked
+                var user = await _userManager.FindByLoginAsync(model.Provider, providerKey);
+
+                if (user == null)
                 {
-                    user = existingUser;
-                }
-                else
-                {
-                    // ✅ 3. Try to find by email
+                    // ✅ 3. Check if exists by email
                     user = await _userManager.FindByEmailAsync(email);
 
                     if (user == null)
                     {
-                        // Create new user if not found
+                        // ✅ 4. Create new user (auto-approved for social)
                         user = new ApplicationUser
                         {
-                            Email = email,
                             UserName = email,
+                            Email = email,
                             Name = name,
                             DateJoined = DateTime.UtcNow,
                             DeviceId = model.DeviceId,
-                            IsApproved = false,
-                            IsSubscriptionActive = false,
+                            IsApproved = true, // 🟢 Auto-approved for social sign-up
+                            IsSubscriptionActive = true,
                             IsAdmin = false,
                             TrialEndDate = DateTime.UtcNow.AddDays(30)
                         };
@@ -513,6 +505,7 @@ namespace QuickCashJobAPI.Controllers
                         if (!createResult.Succeeded)
                             return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
 
+                        // ✅ Assign default role
                         await _userManager.AddToRoleAsync(user, "User");
 
                         // ✅ Save trial record
@@ -524,45 +517,43 @@ namespace QuickCashJobAPI.Controllers
                         });
                         await _db.SaveChangesAsync();
 
-                        // ✅ Send welcome email (async fire-and-forget)
+                        // ✅ Send welcome email
                         _ = Task.Run(async () =>
                         {
                             try
                             {
                                 await _emailSender.SendEmailAsync(
                                     user.Email,
-                                    "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
-                                    $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval.</p>"
+                                    "🎉 Welcome to Splxit Jobs!",
+                                    $@"
+                            <p>Dear {user.Name},</p>
+                            <p>Welcome to <strong>Splxit Jobs</strong>! Your account has been created successfully using Google.</p>
+                            <p>You can now start exploring tasks and opportunities.</p>
+                            <p>Warm regards,<br><strong>The Splxit Jobs Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
+                            "
                                 );
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
+                                _logger.LogWarning(ex, "Failed to send welcome email to {Email}", user.Email);
                             }
                         });
                     }
 
-                    // ✅ 4. Link Google login (important!)
-                    var userLoginInfo = new UserLoginInfo(model.Provider, providerKey, model.Provider);
-                    var addLoginResult = await _userManager.AddLoginAsync(user, userLoginInfo);
-                    if (!addLoginResult.Succeeded)
-                    {
-                        _logger.LogWarning("Failed to link {Provider} login for {Email}", model.Provider, user.Email);
-                    }
+                    // ✅ 5. Link Google login (critical)
+                    var linkResult = await _userManager.AddLoginAsync(user, loginInfo);
+                    if (!linkResult.Succeeded)
+                        _logger.LogWarning("Failed to link {Provider} login for {Email}", model.Provider, email);
                 }
-
-                // ✅ 5. Approval check
-                if (!user.IsApproved)
-                    return Unauthorized(new { message = "Your account is pending admin approval. Please wait for approval." });
 
                 // ✅ 6. Check subscription/trial
                 user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
 
-                // ✅ 7. Roles
+                // ✅ 7. Roles and admin check
                 var userRoles = await _userManager.GetRolesAsync(user);
                 var isAdmin = userRoles.Contains("Admin");
 
-                // ✅ 8. Generate tokens
+                // ✅ 8. Generate JWT + Refresh Token
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
@@ -570,7 +561,7 @@ namespace QuickCashJobAPI.Controllers
 
                 var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
 
-                // ✅ 9. Return response
+                // ✅ 9. Response
                 return Ok(new
                 {
                     UserId = user.Id,
