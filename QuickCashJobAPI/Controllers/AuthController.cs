@@ -449,7 +449,6 @@ namespace QuickCashJobAPI.Controllers
 
             return Ok(user);
         }
-
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
@@ -487,67 +486,93 @@ namespace QuickCashJobAPI.Controllers
 
                     if (user == null)
                     {
-                        // ✅ 4. Create new user (auto-approved for social)
+                        // ✅ Fetch FreeTrial plan
+                        var trialPlan = await _db.SubscriptionPlans
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
+
+                        if (trialPlan == null)
+                            return StatusCode(500, new { message = "Free trial plan not configured." });
+
+                        var now = DateTime.UtcNow;
+
+                        // ✅ 4. Create new user (auto-approved for social login)
                         user = new ApplicationUser
                         {
                             UserName = email,
                             Email = email,
-                            Name = name,
-                            DateJoined = DateTime.UtcNow,
+                            Name = name ?? "User",
+                            Location = "Unknown",
+                            PhoneNumber = "0000000000",
                             DeviceId = model.DeviceId,
-                            IsApproved = true, // 🟢 Auto-approved for social sign-up
-                            IsSubscriptionActive = true,
+                            DateJoined = now,
+                            IsApproved = true,
                             IsAdmin = false,
-                            TrialEndDate = DateTime.UtcNow.AddDays(30)
+                            IsSubscriptionActive = true,
+                            CurrentPlanId = trialPlan.Id,
+                            SubscriptionStartDate = now,
+                            SubscriptionEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7),
+                            TrialEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7),
+                            NumberOfTasksCompleted = 0,
+                            NumberOfTasksEmployed = 0,
+                            LastTaskDoneDate = now,
+                            LastTaskEmployedDate = now
                         };
 
                         var createResult = await _userManager.CreateAsync(user);
                         if (!createResult.Succeeded)
                             return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
 
-                        // ✅ Assign default role
-                        await _userManager.AddToRoleAsync(user, "User");
+                        // ✅ Assign default role (Customer)
+                        await _userManager.AddToRoleAsync(user, "Customer");
 
-                        // ✅ Save trial record
-                        _db.TrialRecords.Add(new TrialRecord
+                        // ✅ Save free trial record (prevent duplicates)
+                        if (!_db.TrialRecords.Any(r => r.Email == email))
                         {
-                            Email = email,
-                            DeviceId = model.DeviceId,
-                            UsedAt = DateTime.UtcNow
-                        });
-                        await _db.SaveChangesAsync();
+                            _db.TrialRecords.Add(new TrialRecord
+                            {
+                                Email = email,
+                                PhoneNumber = user.PhoneNumber,
+                                DeviceId = model.DeviceId,
+                                UsedAt = now
+                            });
+                            await _db.SaveChangesAsync();
+                        }
 
-                        // ✅ Send welcome email
+                        // ✅ Send welcome + trial email (non-blocking)
                         _ = Task.Run(async () =>
                         {
                             try
                             {
                                 await _emailSender.SendEmailAsync(
                                     user.Email,
-                                    "🎉 Welcome to Splxit Jobs!",
+                                    "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
                                     $@"
-                            <p>Dear {user.Name},</p>
-                            <p>Welcome to <strong>Splxit Jobs</strong>! Your account has been created successfully using Google.</p>
-                            <p>You can now start exploring tasks and opportunities.</p>
-                            <p>Warm regards,<br><strong>The Splxit Jobs Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
-                            "
+                        <html>
+                        <body style='font-family: Arial;'>
+                            <h2>Welcome, {user.Name}!</h2>
+                            <p>Your free trial ends on <b>{user.TrialEndDate:dddd, MMM dd, yyyy}</b>.</p>
+                            <p>Start exploring jobs at <a href='https://job.splxit.com'>job.splxit.com</a></p>
+                        </body>
+                        </html>"
                                 );
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogWarning(ex, "Failed to send welcome email to {Email}", user.Email);
+                                _logger.LogWarning(ex, "Failed to send social login welcome email to {Email}", user.Email);
                             }
                         });
                     }
 
-                    // ✅ 5. Link Google login (critical)
+                    // ✅ 5. Link Google login (if not linked)
                     var linkResult = await _userManager.AddLoginAsync(user, loginInfo);
                     if (!linkResult.Succeeded)
                         _logger.LogWarning("Failed to link {Provider} login for {Email}", model.Provider, email);
                 }
 
-                // ✅ 6. Check subscription/trial
+                // ✅ 6. Refresh subscription status
                 user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
 
                 // ✅ 7. Roles and admin check
                 var userRoles = await _userManager.GetRolesAsync(user);
@@ -582,6 +607,46 @@ namespace QuickCashJobAPI.Controllers
                 return StatusCode(500, new { message = "Social login failed.", details = ex.Message });
             }
         }
+
+
+
+
+
+        [Authorize]
+        [HttpPost("complete-profile")]
+        public async Task<IActionResult> CompleteProfile([FromBody] CompleteProfileDto model)
+        {
+            try
+            {
+                var user = await _userManager.GetUserAsync(User);
+                if (user == null)
+                    return Unauthorized(new { message = "User not found." });
+
+                // optional: validate phone format here if desired
+
+                user.PhoneNumber = model.PhoneNumber?.Trim();
+                user.Location = model.Location?.Trim();
+
+                var result = await _userManager.UpdateAsync(user);
+                if (!result.Succeeded)
+                    return BadRequest(new { message = string.Join("; ", result.Errors.Select(e => e.Description)) });
+
+                return Ok(new { message = "Profile completed successfully." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in CompleteProfile");
+                return StatusCode(500, new { message = "Failed to update profile.", details = ex.Message });
+            }
+        }
+
+
+        public class CompleteProfileDto
+        {
+            public string PhoneNumber { get; set; }
+            public string Location { get; set; }
+        }
+
 
 
         public class DeregisterRequest
