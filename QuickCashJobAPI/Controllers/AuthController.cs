@@ -476,14 +476,22 @@ namespace QuickCashJobAPI.Controllers
                     return BadRequest(new { message = "Unsupported provider." });
                 }
 
-                // ✅ 2. Find or create user
-                user = await _userManager.FindByEmailAsync(email);
+                // ✅ 2. Check if trial already used for this email or device
+                var existingTrial = await _db.TrialRecords
+                    .FirstOrDefaultAsync(t => t.Email == email || t.DeviceId == model.DeviceId);
 
+                if (existingTrial != null)
+                {
+                    // Prevent new registration if trial already used
+                    user = await _userManager.FindByEmailAsync(email);
+                    if (user == null)
+                        return BadRequest(new { message = "A trial has already been used for this device or email." });
+                }
+
+                // ✅ 3. Find or create user
+                user = await _userManager.FindByEmailAsync(email);
                 if (user == null)
                 {
-                    if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
-                        return BadRequest(new { message = "A user with this email or device already exists." });
-
                     user = new ApplicationUser
                     {
                         Email = email,
@@ -494,12 +502,22 @@ namespace QuickCashJobAPI.Controllers
                         IsApproved = false,
                         IsSubscriptionActive = false,
                         IsAdmin = false,
-                        TrialEndDate = DateTime.UtcNow.AddDays(7) // Give trial period
+                        TrialEndDate = DateTime.UtcNow.AddDays(7) // Give 7-day trial
                     };
 
                     var createResult = await _userManager.CreateAsync(user);
                     if (!createResult.Succeeded)
                         return BadRequest(createResult.Errors);
+
+                    // ✅ Record trial usage
+                    _db.TrialRecords.Add(new TrialRecord
+                    {
+                        Email = email,
+                        PhoneNumber = user.PhoneNumber ?? "",
+                        DeviceId = model.DeviceId,
+                        UsedAt = DateTime.UtcNow
+                    });
+                    await _db.SaveChangesAsync();
 
                     // ✅ Optional email notification
                     try
@@ -507,24 +525,27 @@ namespace QuickCashJobAPI.Controllers
                         await _emailSender.SendEmailAsync(
                             user.Email,
                             "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
-                            $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval.</p>"
+                            $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval. " +
+                            $"You currently have a 7-day free trial, which starts immediately.</p>" +
+                            $"<p>Once approved, you can log in to access your dashboard.</p><br/>" +
+                            $"<p>– The Splxit Team</p>"
                         );
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to send email to {Email}", user.Email);
+                        _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
                     }
                 }
 
-                // ✅ 3. Ensure approval
+                // ✅ 4. Check approval status
                 if (!user.IsApproved)
-                    return Unauthorized(new { message = "Your account is pending admin approval." });
+                    return Unauthorized(new { message = "Your account is pending admin approval. Please wait for approval." });
 
-                // ✅ 4. Calculate subscription status
+                // ✅ 5. Calculate subscription status
                 var isSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
                 user.IsSubscriptionActive = isSubscriptionActive;
 
-                // ✅ 5. Refresh token + JWT
+                // ✅ 6. Generate refresh token + JWT
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
@@ -532,7 +553,7 @@ namespace QuickCashJobAPI.Controllers
 
                 var jwtToken = GenerateJwtToken(user, user.IsAdmin, isSubscriptionActive, user.IsApproved);
 
-                // ✅ 6. Return identical fields as normal login
+                // ✅ 7. Return identical response fields as normal login
                 return Ok(new
                 {
                     UserId = user.Id,
