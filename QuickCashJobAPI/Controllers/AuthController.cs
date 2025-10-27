@@ -552,7 +552,7 @@ namespace QuickCashJobAPI.Controllers
             public string UserEmailOrPhone { get; set; }
         }
 
-        
+
         [Authorize(Policy = "AdminPolicy")]
         [HttpPost("admin/deregister-device")]
         public async Task<IActionResult> AdminDeregisterDevice([FromBody] DeregisterRequest request)
@@ -561,6 +561,7 @@ namespace QuickCashJobAPI.Controllers
             {
                 _logger.LogInformation("Deregistering for: {UserIdentifier}", request.UserEmailOrPhone);
 
+                // Step 1 — Find user
                 var user = _userManager.Users
                     .FirstOrDefault(u => u.Email == request.UserEmailOrPhone || u.PhoneNumber == request.UserEmailOrPhone);
 
@@ -572,21 +573,39 @@ namespace QuickCashJobAPI.Controllers
 
                 if (string.IsNullOrEmpty(user.DeviceId))
                 {
-                    _logger.LogInformation("No device registered.");
-                    return BadRequest(new { message = "No device is currently registered for this user." });
+                    _logger.LogInformation("No device registered for user.");
                 }
-
-                user.DeviceId = null;
-                var result = await _userManager.UpdateAsync(user);
-
-                if (result.Succeeded)
+                else
                 {
-                    _logger.LogInformation("Device deregistered successfully.");
-                    return Ok(new { message = $"Device for user {user.Email} deregistered successfully." });
+                    // Step 2 — Clear the device from the user table
+                    user.DeviceId = null;
+                    var result = await _userManager.UpdateAsync(user);
+                    if (!result.Succeeded)
+                    {
+                        _logger.LogError("Device update failed for user table.");
+                        return StatusCode(500, new { message = "Failed to update user record." });
+                    }
+                    _logger.LogInformation("DeviceId cleared from user table.");
                 }
 
-                _logger.LogError("Device update failed.");
-                return StatusCode(500, new { message = "Failed to update user record." });
+                // Step 3 — Also clear matching entries in TrialRecords
+                var matchingTrials = _db.TrialRecords
+                    .Where(t => t.Email == request.UserEmailOrPhone || t.PhoneNumber == request.UserEmailOrPhone)
+                    .ToList();
+
+                if (matchingTrials.Any())
+                {
+                    foreach (var trial in matchingTrials)
+                    {
+                        trial.DeviceId = null;
+                    }
+
+                    _db.TrialRecords.UpdateRange(matchingTrials);
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation("DeviceId cleared from TrialRecords table.");
+                }
+
+                return Ok(new { message = $"All devices for user {user.Email} have been deregistered successfully." });
             }
             catch (Exception ex)
             {
