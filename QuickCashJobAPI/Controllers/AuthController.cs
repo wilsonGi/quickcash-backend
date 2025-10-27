@@ -467,8 +467,7 @@ namespace QuickCashJobAPI.Controllers
             }
             else if (model.Provider == "Apple")
             {
-                // Apple JWT validation logic here
-                // Extract email + name
+                // TODO: Add Apple validation later
             }
             else
             {
@@ -480,11 +479,9 @@ namespace QuickCashJobAPI.Controllers
 
             if (user == null)
             {
-                // 3️⃣ Check for duplicates (email, phone, device) like regular registration
                 if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
                     return BadRequest(new { message = "A user with this email or device already exists." });
 
-                // 4️⃣ Create user with no active trial or subscription yet
                 user = new ApplicationUser
                 {
                     Email = email,
@@ -494,55 +491,55 @@ namespace QuickCashJobAPI.Controllers
                     DeviceId = model.DeviceId,
                     IsApproved = false,
                     IsSubscriptionActive = false,
-                    IsAdmin = false
+                    IsAdmin = false,
+                    TrialEndDate = DateTime.UtcNow.AddDays(7) // Give trial after approval
                 };
 
                 var result = await _userManager.CreateAsync(user);
                 if (!result.Succeeded)
                     return BadRequest(result.Errors);
 
-                // Optional: Send pending approval email like registration
+                // Optional: Notify user
                 try
                 {
                     await _emailSender.SendEmailAsync(
                         user.Email,
                         "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
-                        $@"
-                <p>Dear {user.Name},</p>
-                <p>Your account has been created and is <strong>pending admin approval</strong>.</p>
-                <p>Once approved, your 7-day trial will be activated.</p>
-                <p>Thanks,<br>The Splxit Jobs Team</p>"
+                        $"<p>Dear {user.Name},</p><p>Your account is pending admin approval.</p>"
                     );
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
+                    _logger.LogWarning(ex, "Email send failed to {Email}", user.Email);
                 }
             }
 
-            // 5️⃣ Check approval status
+            // 3️⃣ Stop unapproved users
             if (!user.IsApproved)
                 return Unauthorized(new { message = "Admin approval required." });
 
-            // 6️⃣ Generate JWT & refresh token
+            // 4️⃣ Refresh token setup
             var refreshToken = GenerateRefreshToken();
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await _userManager.UpdateAsync(user);
 
+            // 5️⃣ Generate JWT
             var jwtToken = GenerateJwtToken(user, user.IsAdmin, user.IsSubscriptionActive, user.IsApproved);
 
+            // 6️⃣ Return same fields as normal login ✅
             return Ok(new
             {
+                userId = user.Id,
                 token = jwtToken,
                 refreshToken,
                 refreshTokenExpiry = user.RefreshTokenExpiryTime,
-                userId = user.Id,
                 userName = user.Name,
                 userEmail = user.Email,
                 isAdmin = user.IsAdmin,
                 isApproved = user.IsApproved,
-                isSubscriptionActive = user.IsSubscriptionActive
+                isSubscriptionActive = user.IsSubscriptionActive,
+                trialEndDate = user.TrialEndDate
             });
         }
 
