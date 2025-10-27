@@ -67,9 +67,6 @@ namespace QuickCashJobAPI.Models
         public virtual SubscriptionPlan? CurrentPlan { get; set; }
 
 
-
-
-
         // Navigation property
         public virtual ICollection<JobCommitment> JobCommitments { get; set; } = new List<JobCommitment>();
         public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();

@@ -13,7 +13,7 @@ namespace QuickCashJobAPI.Models
         public string PhoneNumber { get; set; }
 
         [MaxLength(4000)]
-        public string DeviceId { get; set; }
+        public string? DeviceId { get; set; }
 
         public DateTime UsedAt { get; set; } = DateTime.UtcNow;
     }

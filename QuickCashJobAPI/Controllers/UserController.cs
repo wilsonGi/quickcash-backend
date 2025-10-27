@@ -120,6 +120,15 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
+        private void EnsureUserDates(ApplicationUser user)
+        {
+            user.LastTaskDoneDate = user.LastTaskDoneDate == default ? DateTime.UtcNow : user.LastTaskDoneDate;
+            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? DateTime.UtcNow : user.LastTaskEmployedDate;
+            user.DateJoined = user.DateJoined == default ? DateTime.UtcNow : user.DateJoined;
+            user.TrialEndDate = user.TrialEndDate == default ? DateTime.UtcNow.AddDays(14) : user.TrialEndDate;
+        }
+
+
 
         [Authorize]
         [HttpGet("ExpiredSubscribers")]
@@ -139,6 +148,8 @@ namespace QuickCashJobAPI.Controllers
 
             return Ok(expiredUsers);
         }
+
+
 
 
         [HttpPost("ApproveUser/{userId}")]
@@ -366,181 +377,99 @@ namespace QuickCashJobAPI.Controllers
         //    }
         //}
 
-
         [HttpPost("DisapproveUser/{userId}")]
         public async Task<IActionResult> DisapproveUser(string userId)
         {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
-            {
-                return NotFound("User not found.");
-            }
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return NotFound("User not found.");
 
-            // Ensure all necessary date fields are populated
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default
-                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
-                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
-
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
-                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
-                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
-
-            user.DateJoined = user.DateJoined == default
-                ? DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
-                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
-            user.TrialEndDate = DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
-
+            EnsureUserDates(user);
 
             user.IsApproved = false;
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
 
-            var result = await _userManager.UpdateAsync(user);
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
 
-            if (!result.Succeeded)
-            {
-                return BadRequest("Failed to disapprove user.");
-            }
+            // Fire-and-forget email
+            _ = Task.Run(() => _emailSender.SendEmailAsync(
+                user.Email,
+                "❌ Your Splxit Jobs Account Was Not Approved",
+                $@"
+        <p>Dear {user.UserName},</p>
+        <p>Thank you for your interest in <strong>Splxit Jobs</strong>.</p>
+        <p>After review, your account was <strong>not approved</strong> at this time.</p>
+        <p>If you wish to appeal, contact <a href='mailto:support@splxit.com'>support@splxit.com</a>.</p>
+        <p>— Splxit Jobs Team</p>"
+            ));
 
-            // Send disapproval email
-            await _emailSender.SendEmailAsync(
-                 user.Email,
-                 "Application Update – Your Splxit Jobs Account Was Not Approved",
-                 $@"
-                <p>Dear {user.UserName},</p>
-                <p>Thank you for your interest in joining <strong>Splxit Jobs</strong>.</p>
-                <p>After reviewing your application, we regret to inform you that it has not been approved at this time.</p>
-                <p>If you believe this is an error or would like to appeal, please reach out to our support team at 
-                <a href='mailto:support@splxit.com'>support@splxit.com</a>.</p>
-                <p>We appreciate your understanding.</p>
-                <p>Sincerely,<br><strong>The Splxit Jobs Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
-                "
-             );
-
-            return Ok("User disapproved successfully, and a notification email has been sent.");
+            return Ok("User disapproved and background email triggered.");
         }
+
 
 
         [HttpPost("BlockUser/{userId}")]
         public async Task<IActionResult> BlockUser(string userId)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound("User not found.");
 
-            // Ensure critical date fields are in UTC
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
-
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
-
-            user.DateJoined = user.DateJoined == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
-
-            user.TrialEndDate = user.TrialEndDate == default
-                ? DateTime.UtcNow.AddDays(14) // example fallback
-                : DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
-
+            EnsureUserDates(user);
             user.IsBlocked = true;
             user.IsSubscriptionActive = false;
             user.LockoutEnd = DateTimeOffset.MaxValue;
 
-            var result = await _userManager.UpdateAsync(user);
-            if (!result.Succeeded)
-            {
-                return BadRequest("Failed to block user.");
-            }
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
 
-            await _emailSender.SendEmailAsync(
-                 user.Email,
-                 "⚠️ Your Splxit Jobs Account Has Been Blocked",
-                 $@"
-                <p>Dear {user.UserName},</p>
-                <p>We regret to inform you that your <strong>Splxit Jobs</strong> account has been <strong>temporarily blocked</strong> due to a violation of our community guidelines or suspicious activity.</p>
-                <p>If you believe this was a mistake or wish to discuss further, please contact us at 
-                <a href='mailto:support@splxit.com'>support@splxit.com</a>.</p>
-                <p>Thank you for your cooperation and understanding.</p>
-                <p>Best regards,<br><strong>The Splxit Jobs Compliance Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
-                "
-             );
+            _ = Task.Run(() => _emailSender.SendEmailAsync(
+                user.Email,
+                "⚠️ Your Splxit Jobs Account Has Been Blocked",
+                $@"
+        <p>Dear {user.UserName},</p>
+        <p>Your <strong>Splxit Jobs</strong> account has been <strong>temporarily blocked</strong>.</p>
+        <p>If this was a mistake, contact <a href='mailto:support@splxit.com'>support@splxit.com</a>.</p>
+        <p>— Splxit Jobs Compliance Team</p>"
+            ));
 
-
-            return Ok("User has been successfully blocked and notified via email.");
+            return Ok("User blocked and background email triggered.");
         }
 
         [HttpPost("UnblockUser/{userId}")]
         public async Task<IActionResult> UnblockUser(string userId)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound("User not found.");
 
-            // Ensure critical date fields are in UTC
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
-
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
-
-            user.DateJoined = user.DateJoined == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
-
-            user.TrialEndDate = user.TrialEndDate == default
-                ? DateTime.UtcNow.AddDays(14)
-                : DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
-
+            EnsureUserDates(user);
             user.IsBlocked = false;
             user.LockoutEnd = null;
 
-            var result = await _userManager.UpdateAsync(user);
-            if (!result.Succeeded)
-            {
-                return BadRequest("Failed to unblock user.");
-            }
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
 
-                await _emailSender.SendEmailAsync(
+            _ = Task.Run(() => _emailSender.SendEmailAsync(
                 user.Email,
                 "✅ Your Splxit Jobs Account Access Has Been Restored",
                 $@"
-                <p>Dear {user.UserName},</p>
-                <p>Good news! Your <strong>Splxit Jobs</strong> account has been <strong>unblocked</strong> and your access has been fully restored.</p>
-                <p>You can now continue to use your account to browse, post, and manage job opportunities.</p>
-                <p>Thank you for your patience.</p>
-                <p>Warm regards,<br><strong>The Splxit Jobs Support Team</strong><br><a href='https://job.splxit.com'>job.splxit.com</a></p>
-                "
-            );
+        <p>Dear {user.UserName},</p>
+        <p>Your <strong>Splxit Jobs</strong> account has been <strong>unblocked</strong>.</p>
+        <p>You can now log in and continue using your account normally.</p>
+        <p>Thank you for your patience.</p>
+        <p>— Splxit Jobs Support Team</p>"
+            ));
 
-            return Ok("User has been successfully unblocked and notified via email.");
+            return Ok("User unblocked and background email triggered.");
         }
 
         [HttpDelete("DeleteUser/{userId}")]
         public async Task<IActionResult> DeleteUser(string userId)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound("User not found.");
 
-            // Ensure critical date fields are in UTC
-            user.LastTaskDoneDate = user.LastTaskDoneDate == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.LastTaskDoneDate, DateTimeKind.Utc);
-
-            user.LastTaskEmployedDate = user.LastTaskEmployedDate == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc);
-
-            user.DateJoined = user.DateJoined == default
-                ? DateTime.UtcNow
-                : DateTime.SpecifyKind(user.DateJoined, DateTimeKind.Utc);
-
-            user.TrialEndDate = user.TrialEndDate == default
-                ? DateTime.UtcNow.AddDays(14)
-                : DateTime.SpecifyKind(user.TrialEndDate, DateTimeKind.Utc);
-
+            EnsureUserDates(user);
             user.IsDeleted = true;
             user.IsSubscriptionActive = false;
 
