@@ -481,16 +481,16 @@ namespace QuickCashJobAPI.Controllers
                 }
 
                 // ✅ 2. Try to find linked social login
-                var existingLogin = await _userManager.FindByLoginAsync(model.Provider, providerKey);
-                ApplicationUser user = null;
+                var existingUser = await _userManager.FindByLoginAsync(model.Provider, providerKey);
+                ApplicationUser user;
 
-                if (existingLogin != null)
+                if (existingUser != null)
                 {
-                    user = existingLogin;
+                    user = existingUser;
                 }
                 else
                 {
-                    // ✅ 3. Try to find user by email
+                    // ✅ 3. Try to find by email
                     user = await _userManager.FindByEmailAsync(email);
 
                     if (user == null)
@@ -511,10 +511,11 @@ namespace QuickCashJobAPI.Controllers
 
                         var createResult = await _userManager.CreateAsync(user);
                         if (!createResult.Succeeded)
-                            return BadRequest(createResult.Errors);
+                            return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
 
                         await _userManager.AddToRoleAsync(user, "User");
 
+                        // ✅ Save trial record
                         _db.TrialRecords.Add(new TrialRecord
                         {
                             Email = email,
@@ -523,30 +524,34 @@ namespace QuickCashJobAPI.Controllers
                         });
                         await _db.SaveChangesAsync();
 
-                        try
+                        // ✅ Send welcome email (async fire-and-forget)
+                        _ = Task.Run(async () =>
                         {
-                            await _emailSender.SendEmailAsync(
-                                user.Email,
-                                "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
-                                $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval.</p>"
-                            );
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
-                        }
+                            try
+                            {
+                                await _emailSender.SendEmailAsync(
+                                    user.Email,
+                                    "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
+                                    $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval.</p>"
+                                );
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
+                            }
+                        });
                     }
 
-                    // ✅ 4. Link Google account to this user if not linked yet
+                    // ✅ 4. Link Google login (important!)
                     var userLoginInfo = new UserLoginInfo(model.Provider, providerKey, model.Provider);
                     var addLoginResult = await _userManager.AddLoginAsync(user, userLoginInfo);
                     if (!addLoginResult.Succeeded)
                     {
-                        _logger.LogWarning("Failed to link social login for {Email}", user.Email);
+                        _logger.LogWarning("Failed to link {Provider} login for {Email}", model.Provider, user.Email);
                     }
                 }
 
-                // ✅ 5. Stop if not approved
+                // ✅ 5. Approval check
                 if (!user.IsApproved)
                     return Unauthorized(new { message = "Your account is pending admin approval. Please wait for approval." });
 
