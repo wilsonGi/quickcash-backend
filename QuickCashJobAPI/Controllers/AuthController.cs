@@ -450,21 +450,28 @@ namespace QuickCashJobAPI.Controllers
             return Ok(user);
         }
 
+
+
+
+
+
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
             try
             {
-                ApplicationUser user = null;
-                string email = null;
-                string name = null;
+                string email;
+                string name;
+                string providerKey;
+                const string provider = "Google"; // Hardcode for Google since Apple isn't supported yet
 
-                // ✅ 1. Validate provider token
-                if (model.Provider == "Google")
+                // ✅ 1. Validate provider token and get user info
+                if (model.Provider == provider)
                 {
                     var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
                     email = payload.Email;
                     name = payload.Name;
+                    providerKey = payload.Subject; // Use Google's unique subject ID as the provider key
                 }
                 else if (model.Provider == "Apple")
                 {
@@ -475,78 +482,59 @@ namespace QuickCashJobAPI.Controllers
                     return BadRequest(new { message = "Unsupported provider." });
                 }
 
-                // ✅ 2. Find or create user
-                user = await _userManager.FindByEmailAsync(email);
+                // ✅ 2. Look up the user using the external login provider and key
+                var loginInfo = new ExternalLoginInfo(null, provider, providerKey, provider);
+                var user = await _userManager.FindByLoginAsync(loginInfo.LoginProvider, loginInfo.ProviderKey);
 
                 if (user == null)
                 {
-                    // Prevent duplicates by email or device
-                    if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
-                        return BadRequest(new { message = "A user with this email or device already exists." });
+                    // User not found by external login. Now, check if a user with this email exists.
+                    user = await _userManager.FindByEmailAsync(email);
 
-                    user = new ApplicationUser
+                    if (user == null)
                     {
-                        Email = email,
-                        UserName = email,
-                        Name = name,
-                        DateJoined = DateTime.UtcNow,
-                        DeviceId = model.DeviceId,
-                        IsApproved = false,
-                        IsSubscriptionActive = false,
-                        IsAdmin = false,
-                        TrialEndDate = DateTime.UtcNow.AddDays(30) // ✅ Match main registration trial period
-                    };
+                        // ✅ No user found, create a new one.
+                        user = new ApplicationUser
+                        {
+                            Email = email,
+                            UserName = email,
+                            Name = name,
+                            DateJoined = DateTime.UtcNow,
+                            DeviceId = model.DeviceId,
+                            IsApproved = false,
+                            IsSubscriptionActive = false,
+                            IsAdmin = false,
+                            TrialEndDate = DateTime.UtcNow.AddDays(30)
+                        };
 
-                    var createResult = await _userManager.CreateAsync(user);
-                    if (!createResult.Succeeded)
-                        return BadRequest(createResult.Errors);
+                        var createResult = await _userManager.CreateAsync(user);
+                        if (!createResult.Succeeded) return BadRequest(createResult.Errors);
 
-                    // Assign default role
-                    await _userManager.AddToRoleAsync(user, "User");
+                        // Add the external login to the new user
+                        var addLoginResult = await _userManager.AddLoginAsync(user, loginInfo);
+                        if (!addLoginResult.Succeeded) return BadRequest(addLoginResult.Errors);
 
-                    // Record trial
-                    _db.TrialRecords.Add(new TrialRecord
-                    {
-                        Email = email,
-                        DeviceId = model.DeviceId,
-                        UsedAt = DateTime.UtcNow
-                    });
-                    await _db.SaveChangesAsync();
-
-                    // Notify
-                    try
-                    {
-                        await _emailSender.SendEmailAsync(
-                            user.Email,
-                            "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
-                            $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval.</p>"
-                        );
+                        await _userManager.AddToRoleAsync(user, "User");
+                        // ... (rest of your new user logic) ...
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
+                        // ✅ User found by email, so link the external login.
+                        var addLoginResult = await _userManager.AddLoginAsync(user, loginInfo);
+                        if (!addLoginResult.Succeeded) return BadRequest(addLoginResult.Errors);
                     }
                 }
 
-                // ✅ 3. Stop if not approved
-                if (!user.IsApproved)
-                    return Unauthorized(new { message = "Your account is pending admin approval. Please wait for approval." });
+                // ✅ 3. Handle login logic for existing and newly created users
+                // ... (rest of your original social-login method from step 3 onwards) ...
+                if (!user.IsApproved) return Unauthorized(new { message = "Your account is pending admin approval. Please wait for approval." });
 
-                // ✅ 4. Handle trial and subscription expiration
-                if (user.TrialEndDate < DateTime.UtcNow)
-                {
-                    user.IsSubscriptionActive = false;
-                }
-                else
-                {
-                    user.IsSubscriptionActive = true;
-                }
+                if (user.TrialEndDate < DateTime.UtcNow) { user.IsSubscriptionActive = false; }
+                else { user.IsSubscriptionActive = true; }
 
-                // ✅ 5. Roles
                 var userRoles = await _userManager.GetRolesAsync(user);
                 var isAdmin = userRoles.Contains("Admin");
 
-                // ✅ 6. Generate refresh token & JWT
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
@@ -554,20 +542,7 @@ namespace QuickCashJobAPI.Controllers
 
                 var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
 
-                // ✅ 7. Return consistent structure
-                return Ok(new
-                {
-                    UserId = user.Id,
-                    Token = token,
-                    RefreshToken = refreshToken,
-                    RefreshTokenExpiry = user.RefreshTokenExpiryTime,
-                    UserName = user.Name,
-                    UserEmail = user.Email,
-                    IsAdmin = isAdmin,
-                    IsSubscriptionActive = user.IsSubscriptionActive,
-                    IsApproved = user.IsApproved,
-                    TrialEndDate = user.TrialEndDate
-                });
+                return Ok(new { UserId = user.Id, Token = token, RefreshToken = refreshToken, RefreshTokenExpiry = user.RefreshTokenExpiryTime, UserName = user.Name, UserEmail = user.Email, IsAdmin = isAdmin, IsSubscriptionActive = user.IsSubscriptionActive, IsApproved = user.IsApproved, TrialEndDate = user.TrialEndDate });
             }
             catch (Exception ex)
             {
@@ -575,6 +550,144 @@ namespace QuickCashJobAPI.Controllers
                 return StatusCode(500, new { message = "Social login failed.", details = ex.Message });
             }
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //[HttpPost("social-login")]
+        //public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
+        //{
+        //    try
+        //    {
+        //        ApplicationUser user = null;
+        //        string email = null;
+        //        string name = null;
+
+        //        // ✅ 1. Validate provider token
+        //        if (model.Provider == "Google")
+        //        {
+        //            var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
+        //            email = payload.Email;
+        //            name = payload.Name;
+        //        }
+        //        else if (model.Provider == "Apple")
+        //        {
+        //            return BadRequest(new { message = "Apple login not yet supported." });
+        //        }
+        //        else
+        //        {
+        //            return BadRequest(new { message = "Unsupported provider." });
+        //        }
+
+        //        // ✅ 2. Find or create user
+        //        user = await _userManager.FindByEmailAsync(email);
+
+        //        if (user == null)
+        //        {
+        //            // Prevent duplicates by email or device
+        //            if (_userManager.Users.Any(u => u.Email == email || u.DeviceId == model.DeviceId))
+        //                return BadRequest(new { message = "A user with this email or device already exists." });
+
+        //            user = new ApplicationUser
+        //            {
+        //                Email = email,
+        //                UserName = email,
+        //                Name = name,
+        //                DateJoined = DateTime.UtcNow,
+        //                DeviceId = model.DeviceId,
+        //                IsApproved = false,
+        //                IsSubscriptionActive = false,
+        //                IsAdmin = false,
+        //                TrialEndDate = DateTime.UtcNow.AddDays(30) // ✅ Match main registration trial period
+        //            };
+
+        //            var createResult = await _userManager.CreateAsync(user);
+        //            if (!createResult.Succeeded)
+        //                return BadRequest(createResult.Errors);
+
+        //            // Assign default role
+        //            await _userManager.AddToRoleAsync(user, "User");
+
+        //            // Record trial
+        //            _db.TrialRecords.Add(new TrialRecord
+        //            {
+        //                Email = email,
+        //                DeviceId = model.DeviceId,
+        //                UsedAt = DateTime.UtcNow
+        //            });
+        //            await _db.SaveChangesAsync();
+
+        //            // Notify
+        //            try
+        //            {
+        //                await _emailSender.SendEmailAsync(
+        //                    user.Email,
+        //                    "🎉 Registration Successful – Awaiting Approval | Splxit Jobs",
+        //                    $"<p>Dear {user.Name},</p><p>Your account has been created and is pending admin approval.</p>"
+        //                );
+        //            }
+        //            catch (Exception ex)
+        //            {
+        //                _logger.LogWarning(ex, "Failed to send registration email to {Email}", user.Email);
+        //            }
+        //        }
+
+        //        // ✅ 3. Stop if not approved
+        //        if (!user.IsApproved)
+        //            return Unauthorized(new { message = "Your account is pending admin approval. Please wait for approval." });
+
+        //        // ✅ 4. Handle trial and subscription expiration
+        //        if (user.TrialEndDate < DateTime.UtcNow)
+        //        {
+        //            user.IsSubscriptionActive = false;
+        //        }
+        //        else
+        //        {
+        //            user.IsSubscriptionActive = true;
+        //        }
+
+        //        // ✅ 5. Roles
+        //        var userRoles = await _userManager.GetRolesAsync(user);
+        //        var isAdmin = userRoles.Contains("Admin");
+
+        //        // ✅ 6. Generate refresh token & JWT
+        //        var refreshToken = GenerateRefreshToken();
+        //        user.RefreshToken = refreshToken;
+        //        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+        //        await _userManager.UpdateAsync(user);
+
+        //        var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
+
+        //        // ✅ 7. Return consistent structure
+        //        return Ok(new
+        //        {
+        //            UserId = user.Id,
+        //            Token = token,
+        //            RefreshToken = refreshToken,
+        //            RefreshTokenExpiry = user.RefreshTokenExpiryTime,
+        //            UserName = user.Name,
+        //            UserEmail = user.Email,
+        //            IsAdmin = isAdmin,
+        //            IsSubscriptionActive = user.IsSubscriptionActive,
+        //            IsApproved = user.IsApproved,
+        //            TrialEndDate = user.TrialEndDate
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Social login failed for provider {Provider}", model.Provider);
+        //        return StatusCode(500, new { message = "Social login failed.", details = ex.Message });
+        //    }
+        //}
 
 
         public class DeregisterRequest
