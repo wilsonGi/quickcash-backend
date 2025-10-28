@@ -606,7 +606,7 @@ namespace QuickCashJobAPI.Controllers
                     IsSubscriptionActive = user.IsSubscriptionActive,
                     IsApproved = user.IsApproved,
                     TrialEndDate = user.TrialEndDate,
-                    NeedsProfileCompletion = needsProfileCompletion // <-- Flutter checks this
+                    needsProfileCompletion = needsProfileCompletion // ✅ lowercase key
                 });
             }
             catch (Exception ex)

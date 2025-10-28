@@ -12,7 +12,7 @@ namespace QuickCashJobAPI.Models
 
         [Required]
         [MaxLength(100)]
-        public string Location { get; set; }
+        public string? Location { get; set; }
 
 
         [Required]
