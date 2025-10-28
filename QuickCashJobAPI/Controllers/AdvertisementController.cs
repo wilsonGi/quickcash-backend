@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using QuickCashJobAPI.Data;
 using QuickCashJobAPI.Models;
 using QuickCashJobAPI.Models.DTO;
-using QuickCashJobAPI.Services; // SD
+using QuickCashJobAPI.Services;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 
@@ -23,6 +23,7 @@ namespace QuickCashJobAPI.Controllers
             _subscriptionService = subscriptionService;
         }
 
+        // ✅ CREATE AD
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> Create([FromBody] AdvertisementDTO model)
@@ -33,7 +34,7 @@ namespace QuickCashJobAPI.Controllers
             if (string.IsNullOrWhiteSpace(user.Location) || string.IsNullOrWhiteSpace(user.PhoneNumber))
                 return BadRequest("Your profile must include Location and Phone Number to post an ad.");
 
-            // 🔒 New: Use SubscriptionService to check limits
+            // 🔒 Check ad limit
             bool canPostAd = await _subscriptionService.CanPostAd(user);
             if (!canPostAd)
             {
@@ -44,19 +45,17 @@ namespace QuickCashJobAPI.Controllers
                 });
             }
 
-
-
-            // ✅ Proceed only if allowed
+            // ✅ Create new ad
             var ad = new Advertisement
             {
                 Category = model.Category,
                 Name = string.IsNullOrWhiteSpace(model.Name) ? user.Name : model.Name,
                 Description = model.Description,
-                Area = user.Location,
-                Contact = user.PhoneNumber,
+                Area = string.IsNullOrWhiteSpace(model.Area) ? user.Location : model.Area,
+                Contact = string.IsNullOrWhiteSpace(model.Contact) ? user.PhoneNumber : model.Contact,
                 UserId = user.Id,
                 CreatedAt = DateTime.UtcNow,
-                IsActive = true
+                IsActive = model.IsActive
             };
 
             _db.Advertisements.Add(ad);
@@ -68,6 +67,9 @@ namespace QuickCashJobAPI.Controllers
                 Category = ad.Category,
                 Name = ad.Name,
                 Description = ad.Description,
+                Area = ad.Area,
+                Contact = ad.Contact,
+                IsActive = ad.IsActive,
                 User = new AdUserDTO
                 {
                     Id = user.Id,
@@ -88,7 +90,6 @@ namespace QuickCashJobAPI.Controllers
             return Ok(dto);
         }
 
-
         private async Task<ApplicationUser?> GetCurrentUserAsync()
         {
             var userId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -100,12 +101,11 @@ namespace QuickCashJobAPI.Controllers
                 .FirstOrDefaultAsync(u => u.Id == userId);
         }
 
-        // ✅ GET all ads
+        // ✅ GET ALL ADS
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
             var currentUser = await GetCurrentUserAsync();
-
 
             var ads = await _db.Advertisements
                 .Include(a => a.User)
@@ -118,42 +118,38 @@ namespace QuickCashJobAPI.Controllers
                     Id = a.Id,
                     Category = a.Category,
                     Name = a.Name,
-                                    Description = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
-                    ? a.Description
-                    : Regex.Replace(
-                        a.Description ?? "",
-                        @"(
-                            \+?\d[\d\s\-]{7,}                               # phone numbers
-                            |[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,} # emails
-                            |(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,} # websites/domains
-                            |(?<!\w)@\w{3,30}                               # social media handles
-                        )",
-                        "[Restricted]",
-                        RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase
-                      ),
-
-
-
+                    Description = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
+                        ? a.Description
+                        : Regex.Replace(
+                            a.Description ?? "",
+                            @"(
+                                \+?\d[\d\s\-]{7,}
+                                |[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+                                |(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+                                |(?<!\w)@\w{3,30}
+                            )",
+                            "[Restricted]",
+                            RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase
+                        ),
+                    Area = a.Area,
+                    Contact = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
+                        ? a.Contact
+                        : "Restricted",
+                    IsActive = a.IsActive,
                     User = new AdUserDTO
                     {
                         Id = a.User.Id,
                         Name = a.User.Name,
                         Location = a.User.Location,
-
                         PhoneNumber = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
-                        ? a.User.PhoneNumber
-                        : "Restricted",
+                            ? a.User.PhoneNumber
+                            : "Restricted",
                         ProfilePhoto = a.User.ProfilePhoto != null
                             ? Convert.ToBase64String(a.User.ProfilePhoto)
                             : null,
                         NumberOfTasksCompleted = a.User.NumberOfTasksCompleted,
                         NumberOfTasksEmployed = a.User.NumberOfTasksEmployed,
-                        LastTaskDoneDate = a.User.LastTaskDoneDate == default ? null : a.User.LastTaskDoneDate,
-                        LastTaskEmployedDate = a.User.LastTaskEmployedDate == default ? null : a.User.LastTaskEmployedDate,
                         UserRating = a.User.UserRating,
-                        Skills = _db.UserSkills.Where(us => us.UserId == a.User.Id).Select(us => us.Skill.Name).ToList(),
-                        CompletedCategories = _db.UserCompletedCategories.Where(uc => uc.UserId == a.User.Id).Select(uc => uc.Category.CategoryName).ToList(),
-                        EmployedCategories = _db.Jobs.Where(j => j.UserId == a.User.Id).Select(j => j.Category.CategoryName).Distinct().ToList(),
                         IsSubscriptionActive = a.User.IsSubscriptionActive,
                         IsApproved = a.User.IsApproved
                     }
@@ -163,6 +159,7 @@ namespace QuickCashJobAPI.Controllers
             return Ok(ads);
         }
 
+        // ✅ GET MY ADS
         [HttpGet("my")]
         [Authorize]
         public async Task<IActionResult> GetMyAds()
@@ -178,6 +175,9 @@ namespace QuickCashJobAPI.Controllers
                     Category = a.Category,
                     Name = a.Name,
                     Description = a.Description,
+                    Area = a.Area,
+                    Contact = a.Contact,
+                    IsActive = a.IsActive,
                     User = new AdUserDTO
                     {
                         Id = user.Id,
@@ -189,12 +189,7 @@ namespace QuickCashJobAPI.Controllers
                             : null,
                         NumberOfTasksCompleted = user.NumberOfTasksCompleted,
                         NumberOfTasksEmployed = user.NumberOfTasksEmployed,
-                        LastTaskDoneDate = user.LastTaskDoneDate == default ? null : user.LastTaskDoneDate,
-                        LastTaskEmployedDate = user.LastTaskEmployedDate == default ? null : user.LastTaskEmployedDate,
                         UserRating = user.UserRating,
-                        Skills = _db.UserSkills.Where(us => us.UserId == user.Id).Select(us => us.Skill.Name).ToList(),
-                        CompletedCategories = _db.UserCompletedCategories.Where(uc => uc.UserId == user.Id).Select(uc => uc.Category.CategoryName).ToList(),
-                        EmployedCategories = _db.Jobs.Where(j => j.UserId == user.Id).Select(j => j.Category.CategoryName).Distinct().ToList(),
                         IsSubscriptionActive = user.IsSubscriptionActive,
                         IsApproved = user.IsApproved
                     }
@@ -203,8 +198,7 @@ namespace QuickCashJobAPI.Controllers
             return Ok(ads);
         }
 
-        
-
+        // ✅ UPDATE AD
         [HttpPut("{id}")]
         [Authorize]
         public async Task<IActionResult> Update(int id, [FromBody] AdvertisementDTO model)
@@ -218,13 +212,15 @@ namespace QuickCashJobAPI.Controllers
             ad.Category = model.Category;
             ad.Name = string.IsNullOrWhiteSpace(model.Name) ? user.Name : model.Name;
             ad.Description = model.Description;
-            ad.Area = user.Location;
-            ad.Contact = user.PhoneNumber;
+            ad.Area = string.IsNullOrWhiteSpace(model.Area) ? user.Location : model.Area;
+            ad.Contact = string.IsNullOrWhiteSpace(model.Contact) ? user.PhoneNumber : model.Contact;
+            ad.IsActive = model.IsActive;
 
             await _db.SaveChangesAsync();
             return NoContent();
         }
 
+        // ✅ DELETE AD (Admin Only)
         [HttpDelete("{id}")]
         [Authorize(Roles = SD.Role_Admin)]
         public async Task<IActionResult> Delete(int id)
@@ -234,7 +230,6 @@ namespace QuickCashJobAPI.Controllers
 
             _db.Advertisements.Remove(ad);
             await _db.SaveChangesAsync();
-
             return NoContent();
         }
     }
