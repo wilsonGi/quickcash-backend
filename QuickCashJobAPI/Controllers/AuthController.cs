@@ -506,8 +506,8 @@ namespace QuickCashJobAPI.Controllers
                             UserName = email,
                             Email = email,
                             Name = name ?? "User",
-                            Location = null, // <-- make nullable
-                            PhoneNumber = null, // <-- make nullable
+                            Location = "Unknown",           // ✅ prevent null
+                            PhoneNumber = "N/A",
                             DeviceId = model.DeviceId,
                             DateJoined = now,
                             IsApproved = true,
