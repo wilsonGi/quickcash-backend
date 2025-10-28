@@ -220,9 +220,42 @@ namespace QuickCashJobAPI.Controllers
             return NoContent();
         }
 
-        // ✅ DELETE AD (Admin Only)
+
+
+        // ✅ TOGGLE SHOW/HIDE AD
+        [HttpPut("{id}/{action}")]
+        [Authorize]
+        public async Task<IActionResult> PerformAction(int id, string action)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            var ad = await _db.Advertisements.FirstOrDefaultAsync(a => a.Id == id && a.UserId == user.Id);
+            if (ad == null) return NotFound("Ad not found or not yours.");
+
+            // Determine the action
+            if (action.Equals("hide", StringComparison.OrdinalIgnoreCase))
+            {
+                ad.IsActive = false;
+            }
+            else if (action.Equals("show", StringComparison.OrdinalIgnoreCase))
+            {
+                ad.IsActive = true;
+            }
+            else
+            {
+                return BadRequest("Invalid action. Use 'show' or 'hide'.");
+            }
+
+            await _db.SaveChangesAsync();
+            return Ok(new { message = $"Ad {(ad.IsActive ? "shown" : "hidden")} successfully." });
+        }
+
+
+
+
         [HttpDelete("{id}")]
-        [Authorize(Roles = SD.Role_Admin)]
+        [Authorize]
         public async Task<IActionResult> Delete(int id)
         {
             var ad = await _db.Advertisements.FindAsync(id);
