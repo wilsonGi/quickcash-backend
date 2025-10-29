@@ -413,14 +413,18 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-
         [Authorize]
         [HttpGet("me")]
         public async Task<IActionResult> GetCurrentUser()
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            // ✅ Get user ID from token claims
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "Invalid token — missing user ID claim." });
+            }
 
+            // ✅ Fetch user data
             var user = await _userManager.Users
                 .Where(u => u.Id == userId)
                 .Select(u => new
@@ -442,10 +446,15 @@ namespace QuickCashJobAPI.Controllers
                     u.IsAdmin,
                     u.IsSubscriptionActive,
                     u.IsApproved,
-                    u.TrialEndDate,
-                    // Optional: include skills or categories if needed
+                    u.TrialEndDate
                 })
                 .FirstOrDefaultAsync();
+
+            // ✅ Handle missing user
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found." });
+            }
 
             return Ok(user);
         }
@@ -919,7 +928,6 @@ namespace QuickCashJobAPI.Controllers
         {
             var jwtSettings = _configuration.GetSection("JWT");
 
-            // ✅ Load secret from appsettings or environment
             var secret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? _configuration["JWT:Secret"];
             if (string.IsNullOrEmpty(secret))
                 throw new Exception("JWT secret is missing — check environment variables or appsettings.json.");
@@ -927,17 +935,20 @@ namespace QuickCashJobAPI.Controllers
             var key = Encoding.ASCII.GetBytes(secret);
             var tokenHandler = new JwtSecurityTokenHandler();
 
+            var claims = new List<Claim>
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id),
+        new Claim(ClaimTypes.Name, user.Name ?? string.Empty),
+        new Claim(ClaimTypes.Email, user.Email ?? string.Empty),              // ✅ Added
+        new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? user.Email ?? string.Empty),
+        new Claim("IsAdmin", isAdmin.ToString()),
+        new Claim("IsSubscriptionActive", isSubscriptionActive.ToString()),
+        new Claim("IsApproved", isApproved.ToString())
+    };
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(new[]
-                {
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Name, user.Name),
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? user.Email),
-            new Claim("IsAdmin", isAdmin.ToString()),
-            new Claim("IsSubscriptionActive", isSubscriptionActive.ToString()),
-            new Claim("IsApproved", isApproved.ToString())
-        }),
+                Subject = new ClaimsIdentity(claims),
                 Expires = DateTime.UtcNow.AddHours(1),
                 Issuer = jwtSettings.GetValue<string>("ValidIssuer"),
                 Audience = jwtSettings.GetValue<string>("ValidAudience"),

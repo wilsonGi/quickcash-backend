@@ -7,6 +7,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using QuickCashJobAPI.Data;
+using System;
 
 namespace QuickCashJobAPI.Controllers
 {
@@ -27,41 +28,44 @@ namespace QuickCashJobAPI.Controllers
         [HttpGet("UserDetails")]
         public async Task<IActionResult> GetUserDetails()
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // ✅ Safely get user ID from JWT claims
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "Invalid token: user ID missing." });
+
             var user = await _userManager.FindByIdAsync(userId);
-
-
             if (user == null)
-            {
-                return NotFound();
-            }
+                return NotFound(new { message = "User not found." });
 
-            bool isSubscriptionActive = bool.Parse(User.FindFirst("IsSubscriptionActive")?.Value ?? "false");
-            // 👇 Count chats for this user (adjust field name if needed)
+            // ✅ Get subscription status from claim (fallback to user property)
+            bool isSubscriptionActive = bool.TryParse(
+                User.FindFirst("IsSubscriptionActive")?.Value, out var activeFromClaim)
+                ? activeFromClaim
+                : user.IsSubscriptionActive;
+
+            // ✅ Count unread chat messages (adjust field name if needed)
             var chatCount = await _db.ChatMessages
-            .CountAsync(c => c.ReceiverId == userId && !c.IsRead);
+                .CountAsync(c => c.ReceiverId == userId && !c.IsRead);
 
-
-
-
+            // ✅ Prepare dashboard data safely
             var dashboardDTO = new DashboardDTO
             {
                 UserName = user.UserName,
                 NumberOfTasksEmployed = user.NumberOfTasksEmployed,
                 NumberOfTasksCompleted = user.NumberOfTasksCompleted,
                 UserRating = user.UserRating,
-                Location = user.Location,
-                PhoneNumber  = user.PhoneNumber,
+                Location = user.Location ?? "Not specified",
+                PhoneNumber = user.PhoneNumber ?? "Not available",
                 LastTaskDoneDate = user.LastTaskDoneDate,
                 LastTaskEmployedDate = user.LastTaskEmployedDate,
                 DateJoined = user.DateJoined,
-                IsSubscriptionActive = user.IsSubscriptionActive, // Include in response
+                IsSubscriptionActive = isSubscriptionActive,
                 IsApproved = user.IsApproved,
                 TrialEndDate = user.TrialEndDate,
-                ProfilePhoto = user.ProfilePhoto != null ? Convert.ToBase64String(user.ProfilePhoto) : null,
-                ChatCount = chatCount // 👈 Include it here
-
-
+                ProfilePhoto = user.ProfilePhoto != null
+                    ? Convert.ToBase64String(user.ProfilePhoto)
+                    : null,
+                ChatCount = chatCount
             };
 
             return Ok(dashboardDTO);
