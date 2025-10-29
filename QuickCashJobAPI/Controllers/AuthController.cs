@@ -461,14 +461,18 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
             try
             {
+                _logger.LogInformation("🌐 Incoming social login from provider: {Provider}, Device: {DeviceId}", model.Provider, model.DeviceId);
+
                 if (model == null || string.IsNullOrEmpty(model.IdToken))
+                {
+                    _logger.LogWarning("⚠️ Invalid social login request received (missing IdToken).");
                     return BadRequest(new { message = "Invalid social login request." });
+                }
 
                 string email = null;
                 string name = null;
@@ -477,22 +481,25 @@ namespace QuickCashJobAPI.Controllers
                 // ✅ 1. Validate token by provider
                 if (model.Provider == "Google")
                 {
+                    _logger.LogInformation("🔍 Validating Google ID token...");
                     var settings = new GoogleJsonWebSignature.ValidationSettings()
                     {
                         Audience = new List<string>
-                        {
-                            "903112624249-08lng0uvmjoqsn4dc4s1uu6bvfj7j4pb.apps.googleusercontent.com" // ← Replace with your Web Client ID
-                        }
+                {
+                    "903112624249-08lng0uvmjoqsn4dc4s1uu6bvfj7j4pb.apps.googleusercontent.com" // your Web Client ID
+                }
                     };
 
                     var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken, settings);
                     email = payload.Email;
                     name = payload.Name;
                     providerKey = payload.Subject;
-                }
 
+                    _logger.LogInformation("✅ Google token validated successfully for {Email}", email);
+                }
                 else
                 {
+                    _logger.LogWarning("❌ Unsupported provider attempted: {Provider}", model.Provider);
                     return BadRequest(new { message = "Unsupported provider." });
                 }
 
@@ -508,23 +515,28 @@ namespace QuickCashJobAPI.Controllers
 
                     if (user == null)
                     {
+                        _logger.LogInformation("🆕 Creating new user via social login: {Email}", email);
+
                         // ✅ Fetch FreeTrial plan
                         var trialPlan = await _db.SubscriptionPlans
                             .AsNoTracking()
                             .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
 
                         if (trialPlan == null)
+                        {
+                            _logger.LogError("❌ Free trial plan not configured in DB.");
                             return StatusCode(500, new { message = "Free trial plan not configured." });
+                        }
 
                         var now = DateTime.UtcNow;
 
-                        // ✅ 4. Create new user (auto-approved for social login)
+                        // ✅ 4. Create new user
                         user = new ApplicationUser
                         {
                             UserName = email,
                             Email = email,
                             Name = name ?? "User",
-                            Location = "Unknown",           // ✅ prevent null
+                            Location = "Unknown",
                             PhoneNumber = "N/A",
                             DeviceId = model.DeviceId,
                             DateJoined = now,
@@ -534,21 +546,19 @@ namespace QuickCashJobAPI.Controllers
                             CurrentPlanId = trialPlan.Id,
                             SubscriptionStartDate = now,
                             SubscriptionEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7),
-                            TrialEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7),
-                            NumberOfTasksCompleted = 0,
-                            NumberOfTasksEmployed = 0,
-                            LastTaskDoneDate = now,
-                            LastTaskEmployedDate = now
+                            TrialEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7)
                         };
 
                         var createResult = await _userManager.CreateAsync(user);
                         if (!createResult.Succeeded)
+                        {
+                            _logger.LogError("❌ User creation failed: {Errors}", string.Join("; ", createResult.Errors.Select(e => e.Description)));
                             return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
+                        }
 
-                        // ✅ Assign default role (Customer)
                         await _userManager.AddToRoleAsync(user, "Customer");
+                        _logger.LogInformation("✅ New social user {Email} assigned to Customer role.", email);
 
-                        // ✅ Save free trial record (prevent duplicates)
                         if (!_db.TrialRecords.Any(r => r.Email == email))
                         {
                             _db.TrialRecords.Add(new TrialRecord
@@ -559,64 +569,29 @@ namespace QuickCashJobAPI.Controllers
                                 UsedAt = now
                             });
                             await _db.SaveChangesAsync();
-                        }
 
-                        // ✅ Send welcome email
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                await _emailSender.SendEmailAsync(
-                                    user.Email,
-                                    "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
-                                    $@"
-                            <html>
-                            <body style='font-family: Arial;'>
-                                <h2>Welcome, {user.Name}!</h2>
-                                <p>Your free trial ends on <b>{user.TrialEndDate:dddd, MMM dd, yyyy}</b>.</p>
-                                <p>Start exploring jobs at <a href='https://job.splxit.com'>job.splxit.com</a></p>
-                            </body>
-                            </html>"
-                                );
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogWarning(ex, "Failed to send social login welcome email to {Email}", user.Email);
-                            }
-                        });
+                            _logger.LogInformation("📊 Free trial record saved for {Email}", email);
+                        }
                     }
 
                     // ✅ 5. Link Google login (if not linked)
                     var linkResult = await _userManager.AddLoginAsync(user, loginInfo);
                     if (!linkResult.Succeeded)
-                        _logger.LogWarning("Failed to link {Provider} login for {Email}", model.Provider, email);
+                        _logger.LogWarning("⚠️ Failed to link {Provider} login for {Email}", model.Provider, email);
+                    else
+                        _logger.LogInformation("🔗 Linked {Provider} login for {Email}", model.Provider, email);
                 }
 
                 // ✅ 6. Refresh subscription status
                 user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
                 await _userManager.UpdateAsync(user);
 
-                // ✅ Auto-fill user details if they are missing
-                if (string.IsNullOrEmpty(user.PhoneNumber) || user.PhoneNumber == "N/A")
-                {
-                    // You can generate a random placeholder phone number
-                    user.PhoneNumber = "0000000000";
-                }
+                _logger.LogInformation("🔄 Updated subscription status for {Email}: {Status}", email, user.IsSubscriptionActive);
 
-                if (string.IsNullOrEmpty(user.Location) || user.Location == "Unknown")
-                {
-                    // You can default this to an empty string or a known default
-                    user.Location = "Not Provided";
-                }
-
-                await _userManager.UpdateAsync(user);
-
-
-                // ✅ 7. Roles and admin check
                 var userRoles = await _userManager.GetRolesAsync(user);
                 var isAdmin = userRoles.Contains("Admin");
 
-                // ✅ 8. Generate JWT + Refresh Token
+                // ✅ 8. Generate tokens
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
@@ -624,10 +599,12 @@ namespace QuickCashJobAPI.Controllers
 
                 var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
 
-                // ✅ 9. Check if user must complete profile
+                _logger.LogInformation("✅ Generated JWT + refresh token for {Email}", email);
+
                 bool needsProfileCompletion = string.IsNullOrEmpty(user.PhoneNumber) || string.IsNullOrEmpty(user.Location);
 
-                // ✅ 10. Return response
+                _logger.LogInformation("🚀 Social login completed successfully for {Email}", email);
+
                 return Ok(new
                 {
                     UserId = user.Id,
@@ -640,15 +617,205 @@ namespace QuickCashJobAPI.Controllers
                     IsSubscriptionActive = user.IsSubscriptionActive,
                     IsApproved = user.IsApproved,
                     TrialEndDate = user.TrialEndDate,
-                    needsProfileCompletion = needsProfileCompletion // ✅ lowercase key
+                    needsProfileCompletion = needsProfileCompletion
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Social login failed for provider {Provider}", model.Provider);
+                _logger.LogError(ex, "❌ Social login failed for provider {Provider}", model.Provider);
                 return StatusCode(500, new { message = "Social login failed.", details = ex.Message });
             }
         }
+
+
+
+        //[HttpPost("social-login")]
+        //public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
+        //{
+        //    try
+        //    {
+        //        if (model == null || string.IsNullOrEmpty(model.IdToken))
+        //            return BadRequest(new { message = "Invalid social login request." });
+
+        //        string email = null;
+        //        string name = null;
+        //        string providerKey = null;
+
+        //        // ✅ 1. Validate token by provider
+        //        if (model.Provider == "Google")
+        //        {
+        //            var settings = new GoogleJsonWebSignature.ValidationSettings()
+        //            {
+        //                Audience = new List<string>
+        //                {
+        //                    "903112624249-08lng0uvmjoqsn4dc4s1uu6bvfj7j4pb.apps.googleusercontent.com" // ← Replace with your Web Client ID
+        //                }
+        //            };
+
+        //            var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken, settings);
+        //            email = payload.Email;
+        //            name = payload.Name;
+        //            providerKey = payload.Subject;
+        //        }
+
+        //        else
+        //        {
+        //            return BadRequest(new { message = "Unsupported provider." });
+        //        }
+
+        //        var loginInfo = new UserLoginInfo(model.Provider, providerKey, model.Provider);
+
+        //        // ✅ 2. Check if already linked
+        //        var user = await _userManager.FindByLoginAsync(model.Provider, providerKey);
+
+        //        if (user == null)
+        //        {
+        //            // ✅ 3. Check if exists by email
+        //            user = await _userManager.FindByEmailAsync(email);
+
+        //            if (user == null)
+        //            {
+        //                // ✅ Fetch FreeTrial plan
+        //                var trialPlan = await _db.SubscriptionPlans
+        //                    .AsNoTracking()
+        //                    .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
+
+        //                if (trialPlan == null)
+        //                    return StatusCode(500, new { message = "Free trial plan not configured." });
+
+        //                var now = DateTime.UtcNow;
+
+        //                // ✅ 4. Create new user (auto-approved for social login)
+        //                user = new ApplicationUser
+        //                {
+        //                    UserName = email,
+        //                    Email = email,
+        //                    Name = name ?? "User",
+        //                    Location = "Unknown",           // ✅ prevent null
+        //                    PhoneNumber = "N/A",
+        //                    DeviceId = model.DeviceId,
+        //                    DateJoined = now,
+        //                    IsApproved = true,
+        //                    IsAdmin = false,
+        //                    IsSubscriptionActive = true,
+        //                    CurrentPlanId = trialPlan.Id,
+        //                    SubscriptionStartDate = now,
+        //                    SubscriptionEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7),
+        //                    TrialEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7),
+        //                    NumberOfTasksCompleted = 0,
+        //                    NumberOfTasksEmployed = 0,
+        //                    LastTaskDoneDate = now,
+        //                    LastTaskEmployedDate = now
+        //                };
+
+        //                var createResult = await _userManager.CreateAsync(user);
+        //                if (!createResult.Succeeded)
+        //                    return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
+
+        //                // ✅ Assign default role (Customer)
+        //                await _userManager.AddToRoleAsync(user, "Customer");
+
+        //                // ✅ Save free trial record (prevent duplicates)
+        //                if (!_db.TrialRecords.Any(r => r.Email == email))
+        //                {
+        //                    _db.TrialRecords.Add(new TrialRecord
+        //                    {
+        //                        Email = email,
+        //                        PhoneNumber = user.PhoneNumber,
+        //                        DeviceId = model.DeviceId,
+        //                        UsedAt = now
+        //                    });
+        //                    await _db.SaveChangesAsync();
+        //                }
+
+        //                // ✅ Send welcome email
+        //                _ = Task.Run(async () =>
+        //                {
+        //                    try
+        //                    {
+        //                        await _emailSender.SendEmailAsync(
+        //                            user.Email,
+        //                            "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
+        //                            $@"
+        //                    <html>
+        //                    <body style='font-family: Arial;'>
+        //                        <h2>Welcome, {user.Name}!</h2>
+        //                        <p>Your free trial ends on <b>{user.TrialEndDate:dddd, MMM dd, yyyy}</b>.</p>
+        //                        <p>Start exploring jobs at <a href='https://job.splxit.com'>job.splxit.com</a></p>
+        //                    </body>
+        //                    </html>"
+        //                        );
+        //                    }
+        //                    catch (Exception ex)
+        //                    {
+        //                        _logger.LogWarning(ex, "Failed to send social login welcome email to {Email}", user.Email);
+        //                    }
+        //                });
+        //            }
+
+        //            // ✅ 5. Link Google login (if not linked)
+        //            var linkResult = await _userManager.AddLoginAsync(user, loginInfo);
+        //            if (!linkResult.Succeeded)
+        //                _logger.LogWarning("Failed to link {Provider} login for {Email}", model.Provider, email);
+        //        }
+
+        //        // ✅ 6. Refresh subscription status
+        //        user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
+        //        await _userManager.UpdateAsync(user);
+
+        //        // ✅ Auto-fill user details if they are missing
+        //        if (string.IsNullOrEmpty(user.PhoneNumber) || user.PhoneNumber == "N/A")
+        //        {
+        //            // You can generate a random placeholder phone number
+        //            user.PhoneNumber = "0000000000";
+        //        }
+
+        //        if (string.IsNullOrEmpty(user.Location) || user.Location == "Unknown")
+        //        {
+        //            // You can default this to an empty string or a known default
+        //            user.Location = "Not Provided";
+        //        }
+
+        //        await _userManager.UpdateAsync(user);
+
+
+        //        // ✅ 7. Roles and admin check
+        //        var userRoles = await _userManager.GetRolesAsync(user);
+        //        var isAdmin = userRoles.Contains("Admin");
+
+        //        // ✅ 8. Generate JWT + Refresh Token
+        //        var refreshToken = GenerateRefreshToken();
+        //        user.RefreshToken = refreshToken;
+        //        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+        //        await _userManager.UpdateAsync(user);
+
+        //        var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
+
+        //        // ✅ 9. Check if user must complete profile
+        //        bool needsProfileCompletion = string.IsNullOrEmpty(user.PhoneNumber) || string.IsNullOrEmpty(user.Location);
+
+        //        // ✅ 10. Return response
+        //        return Ok(new
+        //        {
+        //            UserId = user.Id,
+        //            Token = token,
+        //            RefreshToken = refreshToken,
+        //            RefreshTokenExpiry = user.RefreshTokenExpiryTime,
+        //            UserName = user.Name,
+        //            UserEmail = user.Email,
+        //            IsAdmin = isAdmin,
+        //            IsSubscriptionActive = user.IsSubscriptionActive,
+        //            IsApproved = user.IsApproved,
+        //            TrialEndDate = user.TrialEndDate,
+        //            needsProfileCompletion = needsProfileCompletion // ✅ lowercase key
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Social login failed for provider {Provider}", model.Provider);
+        //        return StatusCode(500, new { message = "Social login failed.", details = ex.Message });
+        //    }
+        //}
 
 
 
