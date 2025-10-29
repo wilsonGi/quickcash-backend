@@ -477,11 +477,20 @@ namespace QuickCashJobAPI.Controllers
                 // ✅ 1. Validate token by provider
                 if (model.Provider == "Google")
                 {
-                    var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken);
+                    var settings = new GoogleJsonWebSignature.ValidationSettings()
+                    {
+                        Audience = new List<string>
+                        {
+                            "903112624249-08lng0uvmjoqsn4dc4s1uu6bvfj7j4pb.apps.googleusercontent.com" // ← Replace with your Web Client ID
+                        }
+                    };
+
+                    var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken, settings);
                     email = payload.Email;
                     name = payload.Name;
-                    providerKey = payload.Subject; // Google unique user ID
+                    providerKey = payload.Subject;
                 }
+
                 else
                 {
                     return BadRequest(new { message = "Unsupported provider." });
