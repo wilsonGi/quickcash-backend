@@ -578,6 +578,22 @@ namespace QuickCashJobAPI.Controllers
                 user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
                 await _userManager.UpdateAsync(user);
 
+                // ✅ Auto-fill user details if they are missing
+                if (string.IsNullOrEmpty(user.PhoneNumber) || user.PhoneNumber == "N/A")
+                {
+                    // You can generate a random placeholder phone number
+                    user.PhoneNumber = "0000000000";
+                }
+
+                if (string.IsNullOrEmpty(user.Location) || user.Location == "Unknown")
+                {
+                    // You can default this to an empty string or a known default
+                    user.Location = "Not Provided";
+                }
+
+                await _userManager.UpdateAsync(user);
+
+
                 // ✅ 7. Roles and admin check
                 var userRoles = await _userManager.GetRolesAsync(user);
                 var isAdmin = userRoles.Contains("Admin");
