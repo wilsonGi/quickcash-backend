@@ -460,7 +460,6 @@ namespace QuickCashJobAPI.Controllers
         }
 
 
-
         [HttpPost("social-login")]
         public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto model)
         {
@@ -486,7 +485,7 @@ namespace QuickCashJobAPI.Controllers
                     {
                         Audience = new List<string>
                 {
-                    "903112624249-08lng0uvmjoqsn4dc4s1uu6bvfj7j4pb.apps.googleusercontent.com" // your Web Client ID
+                    "903112624249-08lng0uvmjoqsn4dc4s1uu6bvfj7j4pb.apps.googleusercontent.com"
                 }
                     };
 
@@ -517,7 +516,6 @@ namespace QuickCashJobAPI.Controllers
                     {
                         _logger.LogInformation("🆕 Creating new user via social login: {Email}", email);
 
-                        // ✅ Fetch FreeTrial plan
                         var trialPlan = await _db.SubscriptionPlans
                             .AsNoTracking()
                             .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
@@ -530,7 +528,7 @@ namespace QuickCashJobAPI.Controllers
 
                         var now = DateTime.UtcNow;
 
-                        // ✅ 4. Create new user
+                        // ✅ Create new user
                         user = new ApplicationUser
                         {
                             UserName = email,
@@ -549,6 +547,7 @@ namespace QuickCashJobAPI.Controllers
                             TrialEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7)
                         };
 
+                        // ✅ Create the user in Identity first
                         var createResult = await _userManager.CreateAsync(user);
                         if (!createResult.Succeeded)
                         {
@@ -556,9 +555,11 @@ namespace QuickCashJobAPI.Controllers
                             return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
                         }
 
+                        // ✅ Assign "Customer" role
                         await _userManager.AddToRoleAsync(user, "Customer");
                         _logger.LogInformation("✅ New social user {Email} assigned to Customer role.", email);
 
+                        // ✅ Record free trial usage
                         if (!_db.TrialRecords.Any(r => r.Email == email))
                         {
                             _db.TrialRecords.Add(new TrialRecord
@@ -582,8 +583,9 @@ namespace QuickCashJobAPI.Controllers
                         _logger.LogInformation("🔗 Linked {Provider} login for {Email}", model.Provider, email);
                 }
 
-                // ✅ 6. Refresh subscription status
+                // ✅ 6. Refresh subscription & approval
                 user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
+                user.IsApproved = true; // same as normal login
                 await _userManager.UpdateAsync(user);
 
                 _logger.LogInformation("🔄 Updated subscription status for {Email}: {Status}", email, user.IsSubscriptionActive);
@@ -591,7 +593,7 @@ namespace QuickCashJobAPI.Controllers
                 var userRoles = await _userManager.GetRolesAsync(user);
                 var isAdmin = userRoles.Contains("Admin");
 
-                // ✅ 8. Generate tokens
+                // ✅ 7. Generate tokens (same as normal login)
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
