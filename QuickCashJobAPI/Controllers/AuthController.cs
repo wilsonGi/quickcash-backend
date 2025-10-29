@@ -468,19 +468,15 @@ namespace QuickCashJobAPI.Controllers
                 _logger.LogInformation("🌐 Incoming social login from provider: {Provider}, Device: {DeviceId}", model.Provider, model.DeviceId);
 
                 if (model == null || string.IsNullOrEmpty(model.IdToken))
-                {
-                    _logger.LogWarning("⚠️ Invalid social login request received (missing IdToken).");
                     return BadRequest(new { message = "Invalid social login request." });
-                }
 
                 string email = null;
                 string name = null;
                 string providerKey = null;
 
-                // ✅ 1. Validate token by provider
+                // 1️⃣ Validate provider token
                 if (model.Provider == "Google")
                 {
-                    _logger.LogInformation("🔍 Validating Google ID token...");
                     var settings = new GoogleJsonWebSignature.ValidationSettings()
                     {
                         Audience = new List<string>
@@ -488,47 +484,39 @@ namespace QuickCashJobAPI.Controllers
                     "903112624249-08lng0uvmjoqsn4dc4s1uu6bvfj7j4pb.apps.googleusercontent.com"
                 }
                     };
-
                     var payload = await GoogleJsonWebSignature.ValidateAsync(model.IdToken, settings);
                     email = payload.Email;
                     name = payload.Name;
                     providerKey = payload.Subject;
-
-                    _logger.LogInformation("✅ Google token validated successfully for {Email}", email);
+                    _logger.LogInformation("✅ Google token validated for {Email}", email);
                 }
                 else
                 {
-                    _logger.LogWarning("❌ Unsupported provider attempted: {Provider}", model.Provider);
                     return BadRequest(new { message = "Unsupported provider." });
                 }
 
                 var loginInfo = new UserLoginInfo(model.Provider, providerKey, model.Provider);
 
-                // ✅ 2. Check if already linked
+                // 2️⃣ Check if user already linked
                 var user = await _userManager.FindByLoginAsync(model.Provider, providerKey);
 
                 if (user == null)
                 {
-                    // ✅ 3. Check if exists by email
+                    // 3️⃣ Check if user exists by email
                     user = await _userManager.FindByEmailAsync(email);
-
                     if (user == null)
                     {
-                        _logger.LogInformation("🆕 Creating new user via social login: {Email}", email);
+                        _logger.LogInformation("🆕 Creating new user: {Email}", email);
 
                         var trialPlan = await _db.SubscriptionPlans
                             .AsNoTracking()
                             .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
 
                         if (trialPlan == null)
-                        {
-                            _logger.LogError("❌ Free trial plan not configured in DB.");
                             return StatusCode(500, new { message = "Free trial plan not configured." });
-                        }
 
                         var now = DateTime.UtcNow;
 
-                        // ✅ Create new user
                         user = new ApplicationUser
                         {
                             UserName = email,
@@ -547,19 +535,12 @@ namespace QuickCashJobAPI.Controllers
                             TrialEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7)
                         };
 
-                        // ✅ Create the user in Identity first
                         var createResult = await _userManager.CreateAsync(user);
                         if (!createResult.Succeeded)
-                        {
-                            _logger.LogError("❌ User creation failed: {Errors}", string.Join("; ", createResult.Errors.Select(e => e.Description)));
                             return BadRequest(new { message = string.Join("; ", createResult.Errors.Select(e => e.Description)) });
-                        }
 
-                        // ✅ Assign "Customer" role
                         await _userManager.AddToRoleAsync(user, "Customer");
-                        _logger.LogInformation("✅ New social user {Email} assigned to Customer role.", email);
 
-                        // ✅ Record free trial usage
                         if (!_db.TrialRecords.Any(r => r.Email == email))
                         {
                             _db.TrialRecords.Add(new TrialRecord
@@ -570,30 +551,27 @@ namespace QuickCashJobAPI.Controllers
                                 UsedAt = now
                             });
                             await _db.SaveChangesAsync();
-
-                            _logger.LogInformation("📊 Free trial record saved for {Email}", email);
                         }
                     }
 
-                    // ✅ 5. Link Google login (if not linked)
+                    // 4️⃣ Link login if not linked
                     var linkResult = await _userManager.AddLoginAsync(user, loginInfo);
                     if (!linkResult.Succeeded)
                         _logger.LogWarning("⚠️ Failed to link {Provider} login for {Email}", model.Provider, email);
-                    else
-                        _logger.LogInformation("🔗 Linked {Provider} login for {Email}", model.Provider, email);
                 }
 
-                // ✅ 6. Refresh subscription & approval
-                user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
-                user.IsApproved = true; // same as normal login
-                await _userManager.UpdateAsync(user);
+                // 5️⃣ Reload user from DB to ensure Id and other fields exist
+                user = await _userManager.FindByEmailAsync(email);
 
-                _logger.LogInformation("🔄 Updated subscription status for {Email}: {Status}", email, user.IsSubscriptionActive);
+                // 6️⃣ Refresh subscription & approval
+                user.IsSubscriptionActive = user.TrialEndDate > DateTime.UtcNow;
+                user.IsApproved = true;
+                await _userManager.UpdateAsync(user);
 
                 var userRoles = await _userManager.GetRolesAsync(user);
                 var isAdmin = userRoles.Contains("Admin");
 
-                // ✅ 7. Generate tokens (same as normal login)
+                // 7️⃣ Generate tokens
                 var refreshToken = GenerateRefreshToken();
                 user.RefreshToken = refreshToken;
                 user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
@@ -601,11 +579,7 @@ namespace QuickCashJobAPI.Controllers
 
                 var token = GenerateJwtToken(user, isAdmin, user.IsSubscriptionActive, user.IsApproved);
 
-                _logger.LogInformation("✅ Generated JWT + refresh token for {Email}", email);
-
                 bool needsProfileCompletion = string.IsNullOrEmpty(user.PhoneNumber) || string.IsNullOrEmpty(user.Location);
-
-                _logger.LogInformation("🚀 Social login completed successfully for {Email}", email);
 
                 return Ok(new
                 {
@@ -619,7 +593,7 @@ namespace QuickCashJobAPI.Controllers
                     IsSubscriptionActive = user.IsSubscriptionActive,
                     IsApproved = user.IsApproved,
                     TrialEndDate = user.TrialEndDate,
-                    needsProfileCompletion = needsProfileCompletion
+                    needsProfileCompletion
                 });
             }
             catch (Exception ex)
