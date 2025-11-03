@@ -12,5 +12,6 @@ namespace QuickCashJobAPI.Models.DTO
         public byte[]? AudioDescription { get; set; }
         public string Payout { get; set; }
         public bool Negotiable { get; set; }
+        public string? ImageUrl { get; set; } // NEW
     }
 }

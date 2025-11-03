@@ -227,6 +227,15 @@ builder.Services.AddScoped<SubscriptionService>();
 builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
+
+// FOR HUBTEL
+builder.Services.Configure<HubtelOptions>(builder.Configuration.GetSection("HubtelOptions"));
+builder.Services.AddHttpClient<IHubtelService, HubtelService>();
+builder.Services.AddScoped<IHubtelService, HubtelService>();
+
+
+
+
 //builder.Services.AddCors(options =>
 //{
 //    options.AddPolicy("AllowFlutterWebApp", policy =>

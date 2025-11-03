@@ -14,6 +14,8 @@ namespace QuickCashJobAPI.Models.DTO
         public byte[]? AudioDescription { get; set; }
         public string Payout { get; set; }
         public bool Negotiable { get; set; }
+        public string? JobImageUrl { get; set; } // NEW
+
 
         // Fields from ApplicationUser that are safe to expose
         public string UserName { get; set; }

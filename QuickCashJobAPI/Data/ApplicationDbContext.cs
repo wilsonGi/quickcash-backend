@@ -38,6 +38,7 @@ namespace QuickCashJobAPI.Data
 
         public DbSet<PayAsYouGoRate> PayAsYouGoRates { get; set; }
         public DbSet<PayAsYouGoTransaction> PayAsYouGoTransactions { get; set; }
+        public DbSet<HubtelTransaction> HubtelTransactions { get; set; }
 
 
 

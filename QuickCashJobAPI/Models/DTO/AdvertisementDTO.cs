@@ -13,6 +13,7 @@
 
         // 👤 Nested User
         public AdUserDTO? User { get; set; }
+        public string? AdImageBase64 { get; set; }
         public string? Area { get; set; }     // ✅ Added
         public string? Contact { get; set; }  // ✅ Added
         public bool IsActive { get; set; }    // ✅ Added

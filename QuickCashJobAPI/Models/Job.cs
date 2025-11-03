@@ -16,6 +16,8 @@ namespace QuickCashJobAPI.Models
         public byte[]? AudioDescription { get; set; }
         public string Payout { get; set; } = string.Empty;
         public bool Negotiable { get; set; }
+        public string? JobImageUrl { get; set; } // new: store Firebase URL
+
 
         // Fields from ApplicationUser
         public string UserName { get; set; }

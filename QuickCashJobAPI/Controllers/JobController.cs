@@ -223,44 +223,7 @@ namespace QuickCashJobAPI.Controllers
 
 
 
-        //[Authorize]
-        //[HttpGet("myjobs")]
-        //[ProducesResponseType(StatusCodes.Status200OK)]
-        //public ActionResult<IEnumerable<JobDTO>> GetMyJobs()
-        //{
-        //    var currentUser = GetCurrentUser();
-        //    if (currentUser == null)
-        //    {
-        //        return Unauthorized(new { message = "User not found." });
-        //    }
-
-        //    var jobs = _db.Jobs
-        //        .Include(job => job.Category)
-        //        .Where(job => job.UserId == currentUser.Id) // Include only jobs created by the current user
-        //        .Select(job => new JobDTO
-        //        {
-        //            Id = job.Id,
-        //            CategoryId = job.CategoryId,
-        //            CategoryName = job.Category.CategoryName,
-        //            Description = job.Description,
-        //            Location = job.Location,
-        //            Status = job.Status,
-        //            DatePosted = job.DatePosted,
-        //            AudioDescription = job.AudioDescription,
-        //            Payout = job.Payout,
-        //            Negotiable = job.Negotiable,
-        //            UserName = job.UserName,
-        //            NumberOfTasksCompleted = job.NumberOfTasksCompleted,
-        //            NumberOfTasksEmployed = job.NumberOfTasksEmployed,
-        //            UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
-        //            UserRating = job.UserRating,
-        //            UserPhoneNumber = job.UserPhoneNumber,
-        //            ShowContact = job.ShowContact,
-
-        //        }).ToList();
-
-        //    return Ok(jobs);
-        //}
+      
 
         [AllowAnonymous]
         [HttpGet]
@@ -515,7 +478,9 @@ namespace QuickCashJobAPI.Controllers
                 UserLastTaskEmployedDate = DateTime.SpecifyKind(user.LastTaskEmployedDate, DateTimeKind.Utc),
                 UserRating = user.UserRating,
                 UserPhoneNumber = user.PhoneNumber,
-                UserId = user.Id
+                UserId = user.Id,
+                JobImageUrl = string.IsNullOrWhiteSpace(jobCreateDTO.ImageUrl) ? null : jobCreateDTO.ImageUrl
+
             };
 
             category.NumberOfInstances++;
@@ -539,7 +504,9 @@ namespace QuickCashJobAPI.Controllers
                 UserLastTaskDoneDate = job.UserLastTaskDoneDate,
                 UserLastTaskEmployedDate = job.UserLastTaskEmployedDate,
                 UserRating = job.UserRating,
-                UserPhoneNumber = job.UserPhoneNumber
+                UserPhoneNumber = job.UserPhoneNumber,
+                JobImageUrl = job.JobImageUrl
+
             };
 
             // ✅ Fire-and-forget notifications (runs after DB save)
