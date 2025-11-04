@@ -280,9 +280,10 @@ using QuickCashJobAPI.Models.DTO;
 using QuickCashJobAPI.Services;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 
 namespace QuickCashJobAPI.Controllers
 {
@@ -328,7 +329,7 @@ namespace QuickCashJobAPI.Controllers
                 using var memoryStream = new MemoryStream();
                 await imageFile.CopyToAsync(memoryStream);
                 var originalBytes = memoryStream.ToArray();
-                compressedImageBytes = CompressImage(originalBytes, 70L); // ~70% quality
+                compressedImageBytes = CompressImage(originalBytes, 70);
             }
 
             var ad = new Advertisement
@@ -352,17 +353,23 @@ namespace QuickCashJobAPI.Controllers
         }
 
         // 🧠 Helper to compress image to reduce DB weight
-        private static byte[] CompressImage(byte[] imageBytes, long quality)
+        private static byte[] CompressImage(byte[] imageBytes, int quality)
         {
-            using var inputStream = new MemoryStream(imageBytes);
-            using var image = Image.FromStream(inputStream);
-
-            var encoder = ImageCodecInfo.GetImageDecoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-            var encoderParams = new EncoderParameters(1);
-            encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
-
+            using var image = Image.Load(imageBytes);
             using var outputStream = new MemoryStream();
-            image.Save(outputStream, encoder, encoderParams);
+
+            // You can resize to limit huge uploads (optional)
+            if (image.Width > 1080)
+            {
+                image.Mutate(x => x.Resize(1080, 0)); // maintain aspect ratio
+            }
+
+            var encoder = new JpegEncoder
+            {
+                Quality = quality // 0–100 (higher = better quality, bigger file)
+            };
+
+            image.Save(outputStream, encoder);
             return outputStream.ToArray();
         }
 
@@ -500,7 +507,7 @@ namespace QuickCashJobAPI.Controllers
             {
                 using var memoryStream = new MemoryStream();
                 await imageFile.CopyToAsync(memoryStream);
-                ad.AdImage = CompressImage(memoryStream.ToArray(), 70L);
+                ad.AdImage = CompressImage(memoryStream.ToArray(), 70);
             }
 
             await _db.SaveChangesAsync();
