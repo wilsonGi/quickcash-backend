@@ -386,13 +386,15 @@ namespace QuickCashJobAPI.Controllers
 
         // ✅ GET ALL ADS
         [HttpGet]
-        [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)] // cache client-side for 1min
+        [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
         public async Task<IActionResult> GetAll()
         {
             var currentUser = await GetCurrentUserAsync();
 
             var ads = await _db.Advertisements
                 .Include(a => a.User)
+                    .ThenInclude(u => u.UserSkills)
+                        .ThenInclude(us => us.Skill)
                 .Where(a => a.User != null &&
                             a.User.IsApproved &&
                             a.User.IsSubscriptionActive &&
@@ -407,11 +409,11 @@ namespace QuickCashJobAPI.Controllers
                         : Regex.Replace(
                             a.Description ?? "",
                             @"(
-                                \+?\d[\d\s\-]{7,}
-                                |[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
-                                |(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}
-                                |(?<!\w)@\w{3,30}
-                            )",
+                        \+?\d[\d\s\-]{7,}
+                        |[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+                        |(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+                        |(?<!\w)@\w{3,30}
+                    )",
                             "[Restricted]",
                             RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase
                         ),
@@ -436,13 +438,17 @@ namespace QuickCashJobAPI.Controllers
                         NumberOfTasksEmployed = a.User.NumberOfTasksEmployed,
                         UserRating = a.User.UserRating,
                         IsSubscriptionActive = a.User.IsSubscriptionActive,
-                        IsApproved = a.User.IsApproved
+                        IsApproved = a.User.IsApproved,
+                        LastTaskDoneDate = a.User.LastTaskDoneDate,
+                        LastTaskEmployedDate = a.User.LastTaskEmployedDate,
+                        Skills = a.User.UserSkills.Select(us => us.Skill.Name).ToList()
                     }
                 })
                 .ToListAsync();
 
             return Ok(ads);
         }
+
 
         // ✅ GET MY ADS
         [HttpGet("my")]
@@ -477,12 +483,16 @@ namespace QuickCashJobAPI.Controllers
                         NumberOfTasksEmployed = user.NumberOfTasksEmployed,
                         UserRating = user.UserRating,
                         IsSubscriptionActive = user.IsSubscriptionActive,
-                        IsApproved = user.IsApproved
+                        IsApproved = user.IsApproved,
+                        LastTaskDoneDate = user.LastTaskDoneDate,
+                        LastTaskEmployedDate = user.LastTaskEmployedDate,
+                        Skills = user.UserSkills.Select(us => us.Skill.Name).ToList()
                     }
                 }).ToListAsync();
 
             return Ok(ads);
         }
+
 
         // ✅ UPDATE AD (can also update image)
         [HttpPut("{id}")]
