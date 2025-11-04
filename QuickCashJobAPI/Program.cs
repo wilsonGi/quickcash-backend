@@ -68,30 +68,26 @@ var mtnSubscriptionKey = Environment.GetEnvironmentVariable("MTN_SUBSCRIPTION_KE
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 string connectionString;
 
-if (!string.IsNullOrEmpty(databaseUrl))
+if (builder.Environment.IsProduction())
 {
-    try
-    {
-        connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-        Console.WriteLine($"☁️ Using PostgreSQL (Railway)\n{connectionString}");
+    if (string.IsNullOrEmpty(databaseUrl))
+        throw new Exception("❌ DATABASE_URL missing in Railway environment!");
 
-        builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString));
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"❌ Failed to parse DATABASE_URL: {ex.Message}");
-        throw;
-    }
+    Console.WriteLine($"☁️ Using Railway PostgreSQL");
+    connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(connectionString));
 }
 else
 {
     connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    Console.WriteLine($"💻 Using SQL Server locally: {connectionString}");
+    Console.WriteLine($"💻 Using local SQL Server");
 
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlServer(connectionString));
 }
+
 
 
 
