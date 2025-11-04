@@ -392,10 +392,14 @@ namespace QuickCashJobAPI.Controllers
             var currentUser = await GetCurrentUserAsync();
 
             var ads = await _db.Advertisements
-                .Include(a => a.User)
-                    .ThenInclude(u => u.UserSkills)
-                        .ThenInclude(us => us.Skill)
-                .Where(a => a.User != null &&
+     .Include(a => a.User)
+         .ThenInclude(u => u.UserSkills)
+             .ThenInclude(us => us.Skill)
+     .Include(a => a.User)
+         .ThenInclude(u => u.JobCommitments)
+             .ThenInclude(jc => jc.Job)
+                 .ThenInclude(j => j.Category)
+                 .Where(a => a.User != null &&
                             a.User.IsApproved &&
                             a.User.IsSubscriptionActive &&
                             !a.User.IsDeleted)
@@ -441,7 +445,19 @@ namespace QuickCashJobAPI.Controllers
                         IsApproved = a.User.IsApproved,
                         LastTaskDoneDate = a.User.LastTaskDoneDate,
                         LastTaskEmployedDate = a.User.LastTaskEmployedDate,
-                        Skills = a.User.UserSkills.Select(us => us.Skill.Name).ToList()
+                        Skills = a.User.UserSkills.Select(us => us.Skill.Name).ToList(),
+                        CompletedCategories = a.User.JobCommitments
+                        .Where(jc => jc.IsApproved && jc.IsConfirmed)
+                        .Select(jc => jc.Job.Category.CategoryName)
+                        .Distinct()
+                        .ToList(),
+
+                         // ✅ Employed (active) categories — still working on (not yet confirmed/approved)
+                         EmployedCategories = a.User.JobCommitments
+                        .Where(jc => !jc.IsConfirmed || !jc.IsApproved)
+                        .Select(jc => jc.Job.Category.CategoryName)
+                        .Distinct()
+                        .ToList()
                     }
                 })
                 .ToListAsync();
