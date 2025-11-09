@@ -191,19 +191,64 @@ namespace QuickCashJobAPI.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
+            // Double-check the user exists
+            var userExists = await _userManager.Users.AnyAsync(u => u.Id == userId);
+            if (!userExists)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            // Try to find the user-skill link
             var userSkill = await _db.UserSkills
+                .AsNoTracking() // prevents EF from tracking stale entities
                 .FirstOrDefaultAsync(us => us.UserId == userId && us.SkillId == skillId);
 
             if (userSkill == null)
             {
-                return NotFound(new { message = "Skill not associated with user" });
+                return NotFound(new { message = "Skill not associated with user or already removed" });
             }
 
-            _db.UserSkills.Remove(userSkill);
-            await _db.SaveChangesAsync();
+            try
+            {
+                _db.UserSkills.Remove(userSkill);
+                var result = await _db.SaveChangesAsync();
 
-            return Ok(new { message = "Skill removed successfully" });
+                // Check if deletion was successful
+                if (result == 0)
+                {
+                    return Conflict(new { message = "No records were affected. It may have already been deleted." });
+                }
+
+                return Ok(new { message = "Skill removed successfully" });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Handle concurrency errors gracefully
+                return Conflict(new { message = "The record was modified or deleted by another process." });
+            }
         }
+
+
+
+        //[Authorize]
+        //[HttpDelete("RemoveSkill/{skillId}")]
+        //public async Task<IActionResult> RemoveSkill(int skillId)
+        //{
+        //    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        //    var userSkill = await _db.UserSkills
+        //        .FirstOrDefaultAsync(us => us.UserId == userId && us.SkillId == skillId);
+
+        //    if (userSkill == null)
+        //    {
+        //        return NotFound(new { message = "Skill not associated with user" });
+        //    }
+
+        //    _db.UserSkills.Remove(userSkill);
+        //    await _db.SaveChangesAsync();
+
+        //    return Ok(new { message = "Skill removed successfully" });
+        //}
 
 
 

@@ -203,7 +203,7 @@ namespace QuickCashJobAPI.Controllers
                 if (trialPlan == null)
                     return StatusCode(500, new { message = "Trial plan not configured." });
 
-                // ✅ Activate trial properly (fix for expired issue)
+                // ✅ Activate trial properly
                 var now = DateTime.UtcNow;
                 user.IsApproved = true;
                 user.IsSubscriptionActive = true;
@@ -215,28 +215,31 @@ namespace QuickCashJobAPI.Controllers
                 user.LastTaskDoneDate = user.LastTaskDoneDate == default ? now : user.LastTaskDoneDate;
                 user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? now : user.LastTaskEmployedDate;
                 user.DateJoined = user.DateJoined == default ? now : user.DateJoined;
-
                 user.Name ??= "User";
                 user.Location ??= "Unknown";
 
-                // ✅ Insert trial record (ignore duplicates)
-                if (!_context.TrialRecords.Any(r => r.Email == user.Email))
+                // ✅ Save trial record using app DbContext only
+                if (!await _context.TrialRecords.AnyAsync(r => r.Email == user.Email))
                 {
                     _context.TrialRecords.Add(new TrialRecord
                     {
                         Email = user.Email,
                         PhoneNumber = user.PhoneNumber,
-                        DeviceId = user.DeviceId
+                        DeviceId = user.DeviceId,
+                        UsedAt = now
                     });
+                    await _context.SaveChangesAsync();
                 }
 
-                // ✅ Batch update (faster)
-                await _context.SaveChangesAsync();
+                // ✅ Update user using IdentityDbContext (correct way)
+                var updateResult = await _userManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    var errors = string.Join("; ", updateResult.Errors.Select(e => e.Description));
+                    return BadRequest(new { message = $"User update failed: {errors}" });
+                }
 
-                // ✅ Update IdentityUser (sync in one go)
-                await _userManager.UpdateAsync(user);
-
-                // ⚡ Fire-and-forget email to avoid slowing request
+                // ✅ Send email (fire and forget)
                 _ = Task.Run(async () =>
                 {
                     try
@@ -256,7 +259,7 @@ namespace QuickCashJobAPI.Controllers
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to send email to {Email}", user.Email);
+                        _logger.LogWarning(ex, "Failed to send approval email to {Email}", user.Email);
                     }
                 });
 
@@ -268,6 +271,100 @@ namespace QuickCashJobAPI.Controllers
                 return StatusCode(500, new { message = $"Unexpected error: {ex.Message}" });
             }
         }
+
+
+
+
+        //[HttpPost("ApproveUser/{userId}")]
+        //public async Task<IActionResult> ApproveUser(string userId)
+        //{
+        //    try
+        //    {
+        //        // ✅ Fetch user + FreeTrial plan in parallel
+        //        var userTask = _userManager.FindByIdAsync(userId);
+        //        var planTask = _context.SubscriptionPlans
+        //            .AsNoTracking()
+        //            .FirstOrDefaultAsync(p => p.Type == SubscriptionTier.FreeTrial);
+
+        //        await Task.WhenAll(userTask, planTask);
+
+        //        var user = userTask.Result;
+        //        var trialPlan = planTask.Result;
+
+        //        if (user == null)
+        //            return NotFound(new { message = "User not found." });
+
+        //        if (user.IsApproved)
+        //            return BadRequest(new { message = "User is already approved." });
+
+        //        if (trialPlan == null)
+        //            return StatusCode(500, new { message = "Trial plan not configured." });
+
+        //        // ✅ Activate trial properly (fix for expired issue)
+        //        var now = DateTime.UtcNow;
+        //        user.IsApproved = true;
+        //        user.IsSubscriptionActive = true;
+        //        user.CurrentPlanId = trialPlan.Id;
+        //        user.SubscriptionStartDate = now;
+        //        user.SubscriptionEndDate = now.AddDays(trialPlan.DurationDays > 0 ? trialPlan.DurationDays : 7);
+        //        user.TrialEndDate = user.SubscriptionEndDate!.Value;
+
+        //        user.LastTaskDoneDate = user.LastTaskDoneDate == default ? now : user.LastTaskDoneDate;
+        //        user.LastTaskEmployedDate = user.LastTaskEmployedDate == default ? now : user.LastTaskEmployedDate;
+        //        user.DateJoined = user.DateJoined == default ? now : user.DateJoined;
+
+        //        user.Name ??= "User";
+        //        user.Location ??= "Unknown";
+
+        //        // ✅ Insert trial record (ignore duplicates)
+        //        if (!_context.TrialRecords.Any(r => r.Email == user.Email))
+        //        {
+        //            _context.TrialRecords.Add(new TrialRecord
+        //            {
+        //                Email = user.Email,
+        //                PhoneNumber = user.PhoneNumber,
+        //                DeviceId = user.DeviceId
+        //            });
+        //        }
+
+        //        // ✅ Batch update (faster)
+        //        await _context.SaveChangesAsync();
+
+        //        // ✅ Update IdentityUser (sync in one go)
+        //        await _userManager.UpdateAsync(user);
+
+        //        // ⚡ Fire-and-forget email to avoid slowing request
+        //        _ = Task.Run(async () =>
+        //        {
+        //            try
+        //            {
+        //                await _emailSender.SendEmailAsync(
+        //                    user.Email,
+        //                    "🎉 Welcome to Splxit Jobs – Your Free Trial Has Begun!",
+        //                    $@"
+        //            <html>
+        //            <body style='font-family: Arial;'>
+        //                <h2>Welcome, {user.Name}!</h2>
+        //                <p>Your free trial ends on <b>{user.TrialEndDate:dddd, MMM dd, yyyy}</b>.</p>
+        //                <p>Start exploring jobs at <a href='https://job.splxit.com'>job.splxit.com</a></p>
+        //            </body>
+        //            </html>"
+        //                );
+        //            }
+        //            catch (Exception ex)
+        //            {
+        //                _logger.LogWarning(ex, "Failed to send email to {Email}", user.Email);
+        //            }
+        //        });
+
+        //        return Ok(new { message = "✅ User approved successfully and trial activated." });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogCritical(ex, "Critical error in ApproveUser for userId: {UserId}", userId);
+        //        return StatusCode(500, new { message = $"Unexpected error: {ex.Message}" });
+        //    }
+        //}
 
 
 
