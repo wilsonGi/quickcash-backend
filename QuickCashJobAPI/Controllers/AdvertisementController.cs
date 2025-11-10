@@ -408,58 +408,78 @@ namespace QuickCashJobAPI.Controllers
                     Id = a.Id,
                     Category = a.Category,
                     Name = a.Name,
-                    Description = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
-                        ? a.Description
-                        : Regex.Replace(
-                            a.Description ?? "",
-                            @"(
+                    Description = (
+        // 🟦 If ad name differs from user's real name → show all
+        a.Name != a.User.Name
+            ? a.Description
+            : (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
+                ? a.Description
+                : Regex.Replace(
+                    a.Description ?? "",
+                    @"(
                         \+?\d[\d\s\-]{7,}
                         |[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
                         |(?:https?:\/\/)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}
                         |(?<!\w)@\w{3,30}
                     )",
-                            "[Restricted]",
-                            RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase
-                        ),
+                    "[Restricted]",
+                    RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase
+                  )
+    ),
                     Area = a.Area,
-                    Contact = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
-                        ? a.Contact
-                        : "Restricted",
+
+                    // 🟩 Contact — unrestricted if business name
+                    Contact = (
+        a.Name != a.User.Name
+            ? a.Contact
+            : (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
+                ? a.Contact
+                : "Restricted"
+    ),
+
                     IsActive = a.IsActive,
                     AdImageBase64 = a.AdImage != null ? Convert.ToBase64String(a.AdImage) : null,
+
                     User = new AdUserDTO
                     {
                         Id = a.User.Id,
                         Name = a.User.Name,
                         Location = a.User.Location,
-                        PhoneNumber = (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
-                            ? a.User.PhoneNumber
-                            : "Restricted",
+                        // 🟨 Hide phone if personal and not authorized
+                        PhoneNumber = (
+            a.Name != a.User.Name
+                ? a.User.PhoneNumber
+                : (currentUser != null && currentUser.IsApproved && currentUser.IsSubscriptionActive)
+                    ? a.User.PhoneNumber
+                    : "Restricted"
+        ),
                         ProfilePhoto = a.User.ProfilePhoto != null
-                            ? Convert.ToBase64String(a.User.ProfilePhoto)
-                            : null,
+            ? Convert.ToBase64String(a.User.ProfilePhoto)
+            : null,
                         NumberOfTasksCompleted = a.User.NumberOfTasksCompleted,
                         NumberOfTasksEmployed = a.User.NumberOfTasksEmployed,
-                        UserRating = a.User.UserRating,
+
+                        // 🟧 Ratings hidden if business (different name)
+                        UserRating = a.Name != a.User.Name ? 0 : a.User.UserRating,
+
                         IsSubscriptionActive = a.User.IsSubscriptionActive,
                         IsApproved = a.User.IsApproved,
                         LastTaskDoneDate = a.User.LastTaskDoneDate,
                         LastTaskEmployedDate = a.User.LastTaskEmployedDate,
                         Skills = a.User.UserSkills.Select(us => us.Skill.Name).ToList(),
                         CompletedCategories = a.User.JobCommitments
-                        .Where(jc => jc.IsApproved && jc.IsConfirmed)
-                        .Select(jc => jc.Job.Category.CategoryName)
-                        .Distinct()
-                        .ToList(),
-
-                         // ✅ Employed (active) categories — still working on (not yet confirmed/approved)
-                         EmployedCategories = a.User.JobCommitments
-                        .Where(jc => !jc.IsConfirmed || !jc.IsApproved)
-                        .Select(jc => jc.Job.Category.CategoryName)
-                        .Distinct()
-                        .ToList()
+            .Where(jc => jc.IsApproved && jc.IsConfirmed)
+            .Select(jc => jc.Job.Category.CategoryName)
+            .Distinct()
+            .ToList(),
+                        EmployedCategories = a.User.JobCommitments
+            .Where(jc => !jc.IsConfirmed || !jc.IsApproved)
+            .Select(jc => jc.Job.Category.CategoryName)
+            .Distinct()
+            .ToList()
                     }
                 })
+
                 .ToListAsync();
 
             return Ok(ads);
