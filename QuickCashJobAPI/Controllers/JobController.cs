@@ -22,6 +22,7 @@ namespace QuickCashJobAPI.Controllers
         private readonly IUserService _userService;
         private readonly NotificationService _notificationService;
         private readonly SubscriptionService _subscriptionService;
+        private readonly DatabaseNotificationService _dbNotificationService;
 
 
 
@@ -29,6 +30,7 @@ namespace QuickCashJobAPI.Controllers
             UserManager<ApplicationUser> userManager, 
             IUserService userService,
             SubscriptionService subscriptionService,
+            DatabaseNotificationService databaseNotificationService,
             NotificationService notificationService)
 
         {
@@ -37,6 +39,7 @@ namespace QuickCashJobAPI.Controllers
             _userService = userService;
             _subscriptionService = subscriptionService;
             _notificationService = notificationService;
+            _dbNotificationService = databaseNotificationService;
 
         }
 
@@ -571,6 +574,16 @@ namespace QuickCashJobAPI.Controllers
                         )
                     );
 
+                    var recipientIds = recipients.Select(r => r.Id).ToList(); // ✅ get just user IDs
+
+                    await _dbNotificationService.CreateNotificationsAsync(
+                        recipientIds, // ✅ now it's IEnumerable<string>
+                        "New Job Posted",
+                        $"{user.Name} just posted a new job. Check it out!",
+                        jobId: job.Id
+                    );
+
+
                     await Task.WhenAll(tasks);
                 }
                 catch (Exception ex)
@@ -671,6 +684,16 @@ namespace QuickCashJobAPI.Controllers
                     $"{user.Name} has committed to your job. Tap to view details."
                 );
             }
+
+            var recipientIds = new List<string> { job.User.Id };
+
+            await _dbNotificationService.CreateNotificationsAsync(
+                recipientIds,
+                "Someone Committed to Your Job",
+                $"{user.Name} has committed to your job. Tap to view details.",
+                jobId: job.Id
+            );
+
 
 
             return Ok(new { message = "Job committed successfully." });
@@ -842,6 +865,14 @@ namespace QuickCashJobAPI.Controllers
 
             }
 
+               await _dbNotificationService.CreateNotificationsAsync(
+                new List<string> { contractor.Id },
+                "Your Job Commitment Was Approved",
+                $"{user.Name} has approved your request. Tap to view job details.",
+                jobId: job.Id
+            );
+
+
 
             return Ok(new { message = "Contractor approved successfully for the job." });
         }
@@ -955,7 +986,12 @@ namespace QuickCashJobAPI.Controllers
 
             }
 
-            //contractor.LastTaskDoneDate = DateTime.UtcNow;
+            await _dbNotificationService.CreateNotificationsAsync(
+                new List<string> { jobOwner.Id },
+                "Job Confirmed",
+                $"{user.Name} has confirmed the job for completion. Tap to review.",
+                jobId: job.Id
+            );
 
             await _db.SaveChangesAsync();
             return Ok(new { message = "Task confirmed successfully." });
@@ -1036,6 +1072,14 @@ namespace QuickCashJobAPI.Controllers
                 );
 
             }
+
+
+                await _dbNotificationService.CreateNotificationsAsync(
+                new List<string> { contractor.Id },
+                "Job Completed",
+                $"{user.Name} has completed the job cycle for both of you. Congratulations!",
+                jobId: job.Id
+            );
 
 
             var categoryCompleted = await _db.UserCompletedCategories
