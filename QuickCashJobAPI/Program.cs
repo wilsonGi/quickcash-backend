@@ -220,6 +220,7 @@ builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddHostedService<SubscriptionCheckService>();
 builder.Services.AddScoped<SubscriptionService>();
+builder.Services.AddScoped<DatabaseNotificationService>();
 builder.Services.AddHttpClient<IMTNMoMoService, MTNMoMoService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
